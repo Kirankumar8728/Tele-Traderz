@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: withdrawals
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string (required) - Owner of the withdrawal
+    //   - amount: number (required, positive)
+    //   - method: string (required)
+    //   - address: string (required)
+    //   - status: string (required, enum: pending, approved, rejected)
+    //   - timestamp: string (required, date-time)
+    //   - rejectionReason: string (optional)
+    //
+    // Collection: balances
+    // Document ID: userId
+    // Fields:
+    //   - balance: number (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "kirankumar8728@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidWithdrawal(data) {
+      return data.keys().hasAll(['userId', 'amount', 'method', 'address', 'status', 'timestamp']) &&
+             data.userId is string &&
+             data.amount is number && data.amount > 0 &&
+             data.method is string && data.method.size() > 0 && data.method.size() < 100 &&
+             data.address is string && data.address.size() > 0 && data.address.size() < 200 &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             data.timestamp is string;
+    }
+
+    function isValidBalance(data) {
+      return data.keys().hasAll(['balance']) &&
+             data.balance is number;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /withdrawals/{withdrawalId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && 
+                      isValidWithdrawal(request.resource.data) && 
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.status == 'pending';
+      allow update: if isAdmin() && isValidWithdrawal(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /balances/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && request.resource.data.role == 'user';
+      allow update: if isAdmin();
+    }
+  }
+}

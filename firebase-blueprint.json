@@ -1,0 +1,38 @@
+{
+  "entities": {
+    "Withdrawal": {
+      "title": "Withdrawal",
+      "description": "A withdrawal request from a user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The ID of the user requesting withdrawal" },
+        "amount": { "type": "number", "description": "The amount to withdraw" },
+        "method": { "type": "string", "description": "The withdrawal method (e.g., USDT, Bank)" },
+        "address": { "type": "string", "description": "The destination address or account number" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "description": "Current status of the request" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the request was made" },
+        "rejectionReason": { "type": "string", "description": "Reason for rejection if applicable" }
+      },
+      "required": ["userId", "amount", "method", "address", "status", "timestamp"]
+    },
+    "UserBalance": {
+      "title": "User Balance",
+      "description": "The referral balance for a user",
+      "type": "object",
+      "properties": {
+        "balance": { "type": "number", "description": "The current referral balance" }
+      },
+      "required": ["balance"]
+    }
+  },
+  "firestore": {
+    "/withdrawals/{withdrawalId}": {
+      "schema": "Withdrawal",
+      "description": "Collection of all withdrawal requests"
+    },
+    "/balances/{userId}": {
+      "schema": "UserBalance",
+      "description": "Mapping of user IDs to their referral balances"
+    }
+  }
+}
