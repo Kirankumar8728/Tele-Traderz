@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AppView, Timeframe, TradeType, WithdrawalRequest } from './types';
 import { getCurrencyConfig } from './constants';
 import { auth } from './firebase';
@@ -8,6 +8,7 @@ import MarketSelector from './components/MarketSelector';
 import TradeForm from './components/TradeForm';
 import TradingToolbar from './components/TradingToolbar';
 import { useDeriv } from './hooks/useDeriv';
+import { OAUTH_CLIENT_ID, NEW_APP_ID, exchangeCodeForToken } from './src/services/derivApiService';
 import { 
   ChevronDown, 
   User, 
@@ -39,7 +40,8 @@ import {
   BookOpen,
   ShieldAlert,
   MessageCircle,
-  FileText
+  FileText,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -54,17 +56,115 @@ const App: React.FC = () => {
   const Footer = () => (
     <div className="py-2 px-4 text-center opacity-50">
       <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-[7px] font-black uppercase tracking-widest text-gray-500 mb-1">
-        <button onClick={() => setCurrentView(AppView.DISCLAIMER)} className="hover:text-white transition-colors">Disclaimer</button>
-        <button onClick={() => setCurrentView(AppView.PRIVACY)} className="hover:text-white transition-colors">Privacy</button>
-        <button onClick={() => setCurrentView(AppView.TERMS)} className="hover:text-white transition-colors">Terms</button>
+        <button onClick={() => setCurrentView(AppView.DISCLAIMER)} className="hover:text-white transition-colors">Responsible Trading</button>
+        <button onClick={() => setCurrentView(AppView.PRIVACY)} className="hover:text-white transition-colors">Privacy Policy</button>
+        <button onClick={() => setCurrentView(AppView.TERMS)} className="hover:text-white transition-colors">Terms & Conditions</button>
         <button onClick={() => setCurrentView(AppView.CONTACT)} className="hover:text-white transition-colors">Contact</button>
       </div>
-      <p className="text-[9px] font-black uppercase tracking-[0.1em] text-white leading-none">Tele Trader</p>
+      <p className="text-[9px] font-black uppercase tracking-[0.1em] text-white leading-none">Bynex Trader</p>
       <p className="text-[7px] font-bold text-gray-500 max-w-[180px] mx-auto leading-tight mt-0.5">
-        Trading involves significant risk. Tele Trader is a third-party interface for Deriv services.
+        Trading involves significant risk. Bynex Trader is a third-party interface for Deriv services.
       </p>
     </div>
   );
+
+  // ============================================================================
+  // Deriv OAuth 2.0 PKCE Callback Handler
+  // Process the '?code=...&state=...' redirect from Deriv
+  // ============================================================================
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    const errorParam = urlParams.get('error');
+
+    if (errorParam) {
+      console.error('[AUTH] Deriv Error:', errorParam, urlParams.get('error_description'));
+      setCustomAlert(`Authentication failed: ${urlParams.get('error_description') || errorParam}`);
+      // Clean URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+      return;
+    }
+
+    if (code && state) {
+      console.log('[AUTH] Callback detected. Code received, verifying security state...');
+      
+      const handleCallback = async () => {
+        // 1. Retrieve stored credentials from sessionStorage
+        const storedState = sessionStorage.getItem('oauth_state');
+        const codeVerifier = sessionStorage.getItem('pkce_code_verifier');
+
+        console.log(`[AUTH] CSRF Verification - Received State: ${state}, Stored State: ${storedState}`);
+
+        // 2. Strict State Comparison
+        if (!storedState || state !== storedState) {
+          console.error('[AUTH] State Mismatch Detected!', { 
+            received: state, 
+            expected: storedState 
+          });
+          
+          setCustomAlert('Authentication Error: Security verification failed (State Mismatch). The login process was aborted for your protection. Please try again.');
+          
+          // Clean up the URL to prevent retry loops
+          window.history.replaceState({}, '', window.location.pathname);
+          return;
+        }
+
+        console.log('[AUTH] Security state verified. Proceeding with token exchange.');
+
+        if (!codeVerifier) {
+          console.error('[AUTH] Missing PKCE code_verifier in sessionStorage');
+          setCustomAlert('Authentication Error: Session expired or data missing. Please try logging in again.');
+          return;
+        }
+
+        try {
+          // 3. Exchange code for token via backend
+          const tokenData = await exchangeCodeForToken(code, codeVerifier);
+          
+          // 4. Store secure token
+          localStorage.setItem('deriv_access_token', tokenData.access_token);
+          const expiresAt = Date.now() + (tokenData.expires_in - 60) * 1000;
+          localStorage.setItem('deriv_token_expires_at', expiresAt.toString());
+          
+          // 5. Clean up session
+          sessionStorage.removeItem('oauth_state');
+          sessionStorage.removeItem('pkce_code_verifier');
+          
+          const returnTo = sessionStorage.getItem('auth_return_to') || window.location.pathname;
+          sessionStorage.removeItem('auth_return_to');
+          
+          console.log('[AUTH] Authentication successful. Redirecting to:', returnTo);
+          
+          if (window.opener && window.opener !== window) {
+            window.opener.postMessage({ type: 'OAUTH_SUCCESS' }, '*');
+            window.close();
+          } else {
+            window.location.assign(returnTo === '/callback/' || returnTo === '/callback' ? '/' : returnTo);
+          }
+        } catch (err: any) {
+          console.error('[AUTH] Token exchange failed:', err);
+          setCustomAlert(`Authentication failed: ${err.message || 'Unknown error during token exchange'}`);
+          
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      };
+
+      handleCallback();
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OAUTH_SUCCESS') {
+        window.location.reload();
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const referralCode = urlParams.get('startapp');
@@ -73,14 +173,14 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const [selectedSymbol, setSelectedSymbol] = useState(() => localStorage.getItem('desi_selected_symbol') || 'R_100');
+  const [selectedSymbol, setSelectedSymbol] = useState(() => localStorage.getItem('desi_selected_symbol') || '1HZ100V');
 
   useEffect(() => {
     localStorage.setItem('desi_selected_symbol', selectedSymbol);
   }, [selectedSymbol]);
   const [timeframe, setTimeframe] = useState<Timeframe>('1m');
   const [tradeType, setTradeType] = useState<TradeType>('CALL');
-  const [userBarrier, setUserBarrier] = useState<string>('+0.10');
+  const [userBarrier, setUserBarrier] = useState<string>('+0.20');
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [showAllAccounts, setShowAllAccounts] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -177,7 +277,7 @@ const App: React.FC = () => {
   }, [openPositions, selectedSymbol]);
 
   const openPositionsList = useMemo(() => {
-    return Object.values(openPositions || {});
+    return Object.values(openPositions || {}).filter((p: any) => p && p.contract_id && !p.is_sold);
   }, [openPositions]);
 
   const getMarketName = useCallback((symbol: string, shortcode?: string) => {
@@ -201,13 +301,21 @@ const App: React.FC = () => {
     }
     if (type === 'CALL') return 'Rise';
     if (type === 'PUT') return 'Fall';
+    if (type === 'HIGHER') return 'Higher';
+    if (type === 'LOWER') return 'Lower';
     if (type === 'TOUCH' || type === 'ONETOUCH') return 'Touch';
     if (type === 'NOTOUCH') return 'No Touch';
     return type?.replace('_', ' ');
   }, []);
 
+  const manualTradeIds = useRef<Set<number>>(new Set());
+
   const handleTradeExecuted = useCallback((trade: any) => {
     if (account && trade.contract_id) {
+      if (trade.isManual) {
+        manualTradeIds.current.add(trade.contract_id);
+      }
+      
       if (account.is_virtual) {
         // Track demo trades and show warning every 2 trades
         setDemoTradeCount(prev => {
@@ -223,6 +331,12 @@ const App: React.FC = () => {
 
   const handleTradeClosed = useCallback(async (contract: any) => {
     if (account && !account.is_virtual && contract.contract_id && contract.profit) {
+      // Only track commission if trade was initiated manually via button
+      if (!manualTradeIds.current.has(contract.contract_id)) {
+        console.log(`[REFER] Skipping non-manual trade: ${contract.contract_id}`);
+        return;
+      }
+
       try {
         const token = await auth.currentUser?.getIdToken();
         const res = await fetch('/api/process-trade', {
@@ -234,11 +348,16 @@ const App: React.FC = () => {
           body: JSON.stringify({
             userId: account.loginid,
             contractId: contract.contract_id,
-            profit: parseFloat(contract.profit)
+            profit: parseFloat(contract.profit),
+            appId: NEW_APP_ID.toString(),
+            referrerId: localStorage.getItem('desi_ref') || localStorage.getItem('referral_code')
           })
         });
         const data = await res.json();
         if (data.success) {
+          // Remove from manual set after successful processing
+          manualTradeIds.current.delete(contract.contract_id);
+          
           // Fetch updated balance from server after successful trade recording
           const balRes = await fetch(`/api/referral-balance/${account.loginid}`);
           const balData = await balRes.json();
@@ -304,25 +423,67 @@ const App: React.FC = () => {
   }, [account?.loginid]);
 
   useEffect(() => {
-    fetch('/api/withdrawals')
-      .then(res => res.json())
-      .then(data => {
+    const fetchWithdrawals = async (retries = 3, delay = 2000) => {
+      try {
+        console.log("[CASHIER] Fetching withdrawals...");
+        const apiUrl = `${window.location.origin}/api/w-requests?t=${Date.now()}`;
+        const res = await fetch(apiUrl, {
+          headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        });
+        
+        if (!res.ok) {
+          const contentType = res.headers.get('content-type');
+          let errorInfo = '';
+          if (contentType && contentType.includes('application/json')) {
+            const errData = await res.json();
+            errorInfo = errData.error || errData.message || '';
+          } else {
+            errorInfo = await res.text();
+          }
+          throw new Error(`Server returned ${res.status}: ${errorInfo || res.statusText}`);
+        }
+        
+        const data = await res.json();
         if (Array.isArray(data)) {
           setWithdrawalRequests(data);
         } else {
-          console.error("Withdrawals API did not return an array:", data);
+          console.error("[CASHIER] Withdrawals API did not return an array:", data);
           setWithdrawalRequests([]);
         }
-      })
-      .catch(err => {
-        console.error("Failed to fetch withdrawals:", err);
-        setWithdrawalRequests([]);
-      });
+      } catch (err: any) {
+        const isNetworkError = err.message === 'Failed to fetch' || err.message.includes('NetworkError');
+        if (retries > 0 && isNetworkError) {
+          console.warn(`[CASHIER] Network error fetching withdrawals, retrying in ${delay}ms... (${retries} attempts left)`);
+          setTimeout(() => fetchWithdrawals(retries - 1, delay * 2), delay);
+        } else {
+          console.error("[CASHIER] Failed to fetch withdrawals:", err.name === 'Error' ? err.message : err);
+          // Only show custom alert if it's not a background refresh
+          if (retries > 1) {
+             setCustomAlert(`Could not load withdrawal history. Please check your connection.`);
+          }
+          setWithdrawalRequests([]);
+        }
+      }
+    };
+    
+    // Initial fetch with delay to ensure server and auth are ready
+    const initialTimer = setTimeout(() => fetchWithdrawals(3, 1000), 1500);
+    
+    // Refresh periodically (every 2 minutes for background)
+    const interval = setInterval(() => fetchWithdrawals(1, 0), 120000); 
+    
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
   }, []);
 
   const saveWithdrawalRequest = async (req: WithdrawalRequest) => {
     try {
-      const res = await fetch('/api/withdrawals', {
+      const res = await fetch('/api/w-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(req)
@@ -345,7 +506,7 @@ const App: React.FC = () => {
     if (!request) return;
 
     try {
-      const res = await fetch(`/api/withdrawals/${id}`, {
+      const res = await fetch(`/api/w-requests/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, rejectionReason: reason })
@@ -370,55 +531,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token1 = params.get('token1');
     const ref = params.get('ref');
     
     // Check for Telegram start_param (referral ID)
     const tgStartParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
-
-    if (token1) {
-      const accounts = [];
-      let bestToken = token1;
-      let bestPriority = 0; // 0: default, 1: virtual, 2: real, 3: real USD
-
-      for (let i = 1; i <= 10; i++) {
-          const t = params.get(`token${i}`);
-          const a = params.get(`acct${i}`);
-          const c = params.get(`cur${i}`);
-          
-          if (t && a) {
-              const resolvedCurrency = c || 'USD';
-              accounts.push({ id: a, token: t, currency: resolvedCurrency });
-              
-              // Priority logic
-              let priority = 1; // Virtual
-              if (!a.startsWith('VRT')) {
-                  priority = 2; // Real
-                  if (resolvedCurrency.toUpperCase() === 'USD') {
-                      priority = 3; // Real USD
-                  }
-              }
-              
-              if (priority > bestPriority) {
-                  bestPriority = priority;
-                  bestToken = t;
-              }
-          }
-      }
-      
-      localStorage.setItem('deriv_token', bestToken);
-      localStorage.setItem('deriv_accounts', JSON.stringify(accounts));
-      localStorage.setItem('deriv_active_account', accounts[0].id);
-      
-      try {
-        window.history.replaceState({}, document.title, '/');
-      } catch (e) {
-        console.error("Failed to replace state", e);
-      }
-      
-      window.location.reload();
-      return; // Stop execution
-    }
 
     if (tgStartParam) {
       localStorage.setItem('desi_ref', tgStartParam);
@@ -455,7 +571,7 @@ const App: React.FC = () => {
   const currentMarket = useMemo(() => 
     markets.find(m => m.underlying_symbol === selectedSymbol) || { 
       underlying_symbol_name: 'Volatility 100 Index', 
-      underlying_symbol: 'R_100',
+      underlying_symbol: '1HZ100V',
       market: 'synthetic_index',
       submarket: 'random_index'
     }
@@ -485,7 +601,7 @@ const App: React.FC = () => {
   }, [proposals, openPositions, tradeType]);
 
   const realAccount = availableAccounts.find(acc => !acc.is_virtual && acc.currency === 'USD') || availableAccounts.find(acc => !acc.is_virtual);
-  const referralLink = realAccount ? `https://t.me/miniteletraderbot/refer?startapp=${realAccount.loginid}` : 'Real Account Required';
+  const referralLink = realAccount ? `https://t.me/bynextraderreferbot/refer?startapp=${realAccount.loginid}` : 'Real Account Required';
 
   const copyReferralLink = () => {
     if (!realAccount) return;
@@ -506,10 +622,26 @@ const App: React.FC = () => {
   }, [currentView, getHistory]);
 
   const renderContent = () => {
+    const formatTimeLeft = (seconds: number) => {
+      if (seconds <= 0) return '0 Seconds';
+      const d = Math.floor(seconds / (24 * 3600));
+      const h = Math.floor((seconds % (24 * 3600)) / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = Math.floor(seconds % 60);
+
+      const parts = [];
+      if (d > 0) parts.push(`${d} Day${d > 1 ? 's' : ''}`);
+      if (h > 0) parts.push(`${h} Hour${h > 1 ? 's' : ''}`);
+      if (m > 0) parts.push(`${m} Min${m > 1 ? 's' : ''}`);
+      if (s > 0 || parts.length === 0) parts.push(`${s} Sec${s > 1 ? 's' : ''}`);
+
+      return parts.join(' ');
+    };
+
     switch (currentView) {
       case AppView.TRADE:
         return (
-          <div className="relative h-full flex flex-col bg-[#0b0e14] flex-1 overflow-y-auto pb-32">
+          <div className="relative h-full flex flex-col bg-[#0b0e14] flex-1 overflow-y-auto pb-28">
             {/* Market Header */}
             <div className="sticky top-2 left-2 right-2 flex items-center justify-between z-50 pointer-events-none mx-2">
               <div className="pointer-events-auto">
@@ -577,6 +709,7 @@ const App: React.FC = () => {
                 onTradeTypeChange={setTradeType}
                 proposalTrigger={proposalTrigger}
                 currency={account?.currency}
+                isConnected={isConnected}
               />
               <div className="mt-3 text-center px-4">
                 <p className="text-[8px] text-gray-500 leading-tight">
@@ -649,7 +782,7 @@ const App: React.FC = () => {
                         {Number(pos.profit) >= 0 ? '+' : ''}{Number(pos.profit || 0).toFixed(getCurrencyConfig(account?.currency || 'USD').decimals)} {account?.currency}
                       </p>
                       <p className="text-[10px] font-bold text-yellow-500 uppercase">
-                        {pos.date_expiry ? `${Math.max(0, Math.floor(pos.date_expiry - now / 1000))}s left` : 'RUNNING'}
+                        {pos.date_expiry ? `${formatTimeLeft(Math.max(0, Math.floor(pos.date_expiry - now / 1000)))} left` : 'RUNNING'}
                       </p>
                       <button 
                         disabled={pos.is_sell_allowed === 0}
@@ -687,6 +820,12 @@ const App: React.FC = () => {
                             <p className="text-[10px] font-bold text-gray-500 uppercase">{t.entry_time ? format(t.entry_time * 1000, 'MMM dd, HH:mm') : 'N/A'}</p>
                             <span className="w-1 h-1 bg-white/10 rounded-full" />
                             <p className="text-[10px] font-bold text-gray-500 uppercase">{getTradeTypeDisplay(t.type, t.shortcode)}</p>
+                            {t.entry_time && t.exit_time && (
+                              <>
+                                <span className="w-1 h-1 bg-white/10 rounded-full" />
+                                <p className="text-[10px] font-bold text-gray-500 uppercase">Dur: {formatTimeLeft(t.exit_time - t.entry_time)}</p>
+                              </>
+                            )}
                           </div>
                           <p className="text-[8px] font-mono text-gray-600 uppercase mt-0.5">ID: {t.contract_id}</p>
                           {sellErrors[t.contract_id] && (
@@ -1308,7 +1447,7 @@ const App: React.FC = () => {
               <h3 className="text-sm font-black uppercase italic px-2">How it works</h3>
               {[
                 { step: '01', title: 'Invite Friends', desc: 'Share your unique link via Telegram or Social Media.' },
-                { step: '02', title: 'They Trade', desc: 'Your referrals sign up and start trading on Tele Trader.' },
+                { step: '02', title: 'They Trade', desc: 'Your referrals sign up and start trading on Bynex Trader.' },
                 { step: '03', title: 'Earn Rewards', desc: 'Get 1% commission on every trade they make.' },
               ].map(s => (
                 <div key={s.step} className="flex items-start gap-4 p-4 bg-white/5 rounded-2xl border border-white/5">
@@ -1379,8 +1518,8 @@ const App: React.FC = () => {
 
             {!account ? (
               <div className="space-y-3">
-                <button onClick={signup} className="w-full py-4 bg-red-600 rounded-2xl font-black text-sm uppercase shadow-lg shadow-red-600/20 hover:bg-red-500 transition-colors">Open Free Account</button>
-                <button onClick={login} className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl font-black text-sm uppercase hover:bg-white/10 transition-colors">Login to Deriv</button>
+                <button onClick={signup} className="w-full py-4 bg-red-600 rounded-2xl font-black text-sm uppercase shadow-lg shadow-red-600/20 hover:bg-red-500 transition-colors">Register</button>
+                <button onClick={login} className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl font-black text-sm uppercase hover:bg-white/10 transition-colors">Login</button>
               </div>
             ) : (
               <div className="space-y-4">
@@ -1461,29 +1600,43 @@ const App: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
             <h2 className="text-xl font-black italic uppercase">Privacy Policy</h2>
-            <div className="text-sm text-gray-400 space-y-4">
-              <p>This Privacy Policy explains how Tele Trader collects, uses, and protects your information.</p>
+            <div className="text-sm text-gray-400 space-y-6">
+              <p>This Privacy Policy outlines how Bynex Trader ("we", "our", or "the Platform") manages, protects, and utilizes your data when you use our trading interface.</p>
               
-              <h3 className="text-white font-bold uppercase text-xs">1. Information We Collect</h3>
-              <p>We collect minimal data necessary for trading, including:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Your Deriv Account ID (Login ID)</li>
-                <li>Trade history and performance logs</li>
-                <li>Basic device information and IP address for security</li>
-                <li>Telegram ID (if using the Telegram bot integration)</li>
-              </ul>
+              <section className="space-y-2">
+                <h3 className="text-white font-bold uppercase text-xs flex items-center gap-2">
+                  <ShieldCheck className="w-3 h-3 text-green-500" />
+                  1. OAuth 2.0 & Authentication Security
+                </h3>
+                <p>Bynex Trader utilizes the industry-standard OAuth 2.0 Authorization Code flow with PKCE (Proof Key for Code Exchange). We <strong>NEVER</strong> see, request, or store your Deriv account password. Your credentials are entered exclusively on Deriv's official authentication servers.</p>
+              </section>
 
-              <h3 className="text-white font-bold uppercase text-xs">2. How We Collect Data</h3>
-              <p>Data is collected through direct input (login), cookies for session management, and API logs from Deriv.</p>
+              <section className="space-y-2">
+                <h3 className="text-white font-bold uppercase text-xs flex items-center gap-2">
+                  <Lock className="w-3 h-3 text-blue-500" />
+                  2. Token Management
+                </h3>
+                <p>Upon successful authentication, the Platform receives short-lived access tokens and refresh tokens. These tokens are used solely to execute market operations on your behalf via the Deriv API. Tokens are stored securely and are only valid for the duration of your session or until revoked by you through your Deriv account settings.</p>
+              </section>
 
-              <h3 className="text-white font-bold uppercase text-xs">3. Data Usage & Storage</h3>
-              <p>Your data is used to provide trading services, improve app performance, and comply with legal requirements. We use secure servers to protect your data.</p>
+              <section className="space-y-2">
+                <h3 className="text-white font-bold uppercase text-xs flex items-center gap-2">
+                  <FileText className="w-3 h-3 text-gray-400" />
+                  3. Account Data Handling
+                </h3>
+                <p>To provide an integrated trading experience, we retrieve and temporarily display basic account information, including:
+                  <ul className="list-disc pl-5 mt-2 space-y-1">
+                    <li>Account balances and currency types.</li>
+                    <li>Open positions and portfolio performance.</li>
+                    <li>Historical trade data for performance analysis.</li>
+                  </ul>
+                This data is accessed in real-time through the Deriv API and is not shared with unauthorized third parties.</p>
+              </section>
 
-              <h3 className="text-white font-bold uppercase text-xs">4. Data Sharing</h3>
-              <p>We share data with Deriv as necessary to execute trades and manage your account. We do not sell your personal information to third parties.</p>
-
-              <h3 className="text-white font-bold uppercase text-xs">5. Your Rights</h3>
-              <p>You have the right to access, correct, or delete your data. Please contact us if you wish to exercise these rights.</p>
+              <section className="space-y-2">
+                <h3 className="text-white font-bold uppercase text-xs">4. Data Integrity</h3>
+                <p>We implement robust technical and organizational measures to safeguard your trading session from unauthorized access. Users are encouraged to enable Two-Factor Authentication (2FA) on their primary Deriv accounts for maximum security.</p>
+              </section>
             </div>
             <Footer />
           </div>
@@ -1496,23 +1649,33 @@ const App: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
             <h2 className="text-xl font-black italic uppercase">Terms & Conditions</h2>
-            <div className="text-sm text-gray-400 space-y-4">
-              <p>By using the Tele Trader app, you agree to these Terms & Conditions.</p>
+            <div className="text-sm text-gray-400 space-y-6">
+              <p>Welcome to Bynex Trader. By accessing or using this application, you agree to be bound by the following Terms & Conditions.</p>
 
-              <h3 className="text-white font-bold uppercase text-xs">1. Who We Are</h3>
-              <p>Tele Trader is an independent third-party interface that uses the Deriv API. We are not Deriv, and your trading account is held with Deriv.</p>
+              <section className="space-y-2">
+                <h3 className="text-white font-bold uppercase text-xs">1. Third-Party Interface Disclosure</h3>
+                <p>Bynex Trader is an independent third-party trading interface built using the official Deriv API. It is <strong>NOT</strong> an official Deriv application, nor is it owned or operated by Deriv. We provide a custom interface to access Deriv's financial services.</p>
+              </section>
 
-              <h3 className="text-white font-bold uppercase text-xs">2. App Usage</h3>
-              <p>This app provides a trading interface. You must be at least 18 years old and reside in a country where trading is legal to use this service.</p>
+              <section className="space-y-2">
+                <h3 className="text-white font-bold uppercase text-xs">2. Adherence to Deriv Terms</h3>
+                <p>By using this platform, you explicitly acknowledge that you must also strictly adhere to <strong>Deriv's official Terms and Conditions</strong> and legal framework. Any violation of Deriv's policies may lead to the suspension of your account both on our platform and by Deriv.</p>
+              </section>
 
-              <h3 className="text-white font-bold uppercase text-xs">3. Fees & Markup</h3>
-              <p>Tele Trader may apply a 2% markup or commission on specific trade types or services. By trading, you acknowledge and accept these fees.</p>
+              <section className="space-y-2">
+                <h3 className="text-white font-bold uppercase text-xs text-yellow-500">3. Commission & Markup Disclosure</h3>
+                <p>Bynex Trader operates on a commercial model where the Platform earns a <strong>markup commission</strong> on executed contracts. This markup is integrated into the contract pricing or payout ratios and may affect your final profitability. By executing a trade, you provide your informed consent to this fee structure.</p>
+              </section>
 
-              <h3 className="text-white font-bold uppercase text-xs">4. No Liability</h3>
-              <p>We are not responsible for any trading losses. Trading involves significant risk, and you are solely responsible for your decisions.</p>
+              <section className="space-y-2">
+                <h3 className="text-white font-bold uppercase text-xs text-red-500">4. Limitation of Liability</h3>
+                <p>The developers and operators of Bynex Trader shall not be held liable for any financial losses, damages, or claims arising from trading activities. Trading outcomes depend on market conditions and your individual strategy. We do not provide financial advice or guarantee platform uptime.</p>
+              </section>
 
-              <h3 className="text-white font-bold uppercase text-xs">5. Deriv Terms</h3>
-              <p>You must also comply with Deriv's own Terms of Service. Any violation of Deriv's terms may result in account suspension.</p>
+              <section className="space-y-2">
+                <h3 className="text-white font-bold uppercase text-xs">5. Risk Acceptance</h3>
+                <p>You acknowledge that financial trading is highly speculative and carries a substantial risk of loss. You represent that you have the necessary financial knowledge and resources to engage in such activities.</p>
+              </section>
             </div>
             <Footer />
           </div>
@@ -1524,24 +1687,37 @@ const App: React.FC = () => {
             <button onClick={() => setCurrentView(AppView.PROFILE)} className="p-2 bg-white/5 rounded-full mb-4">
               <X className="w-5 h-5" />
             </button>
-            <h2 className="text-xl font-black italic uppercase text-red-500">Risk Disclaimer</h2>
-            <div className="text-sm text-gray-400 space-y-4">
+            <h2 className="text-xl font-black italic uppercase text-red-500">Secure & Responsible Trading</h2>
+            <div className="text-sm text-gray-400 space-y-6">
               <div className="p-4 bg-red-600/10 border border-red-600/20 rounded-2xl">
-                <p className="text-red-500 font-bold uppercase text-xs mb-2">Warning: High Risk</p>
-                <p className="text-xs">Trading involves significant risk of loss. You should only trade with money you can afford to lose.</p>
+                <p className="text-red-500 font-bold uppercase text-xs mb-2 flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4" />
+                  HIGH-RISK INVESTMENT WARNING
+                </p>
+                <p className="text-xs leading-relaxed">
+                  Trading in financial markets, especially derivatives and contracts for difference (CFDs), carries an extremely high level of risk. Most retail investor accounts lose money when trading these products.
+                </p>
               </div>
               
-              <h3 className="text-white font-bold uppercase text-xs">1. Risk of Loss</h3>
-              <p>Trading is highly speculative and risky. It is possible to lose your entire investment. Past performance is not indicative of future results.</p>
+              <section className="space-y-2">
+                <h3 className="text-white font-bold uppercase text-xs">1. The Dangers of Leverage</h3>
+                <p>Leverage can work both for and against you. While it can amplify potential returns, it also exponentially increases the risk of rapid capital loss. Even small market movements can result in the loss of your total investment or more if not managed correctly.</p>
+              </section>
 
-              <h3 className="text-white font-bold uppercase text-xs">2. No Guarantees</h3>
-              <p>We do not guarantee any profits. There is no "sure way" to win in trading. Any strategies provided are for educational purposes only.</p>
+              <section className="space-y-2">
+                <h3 className="text-white font-bold uppercase text-xs">2. Capital Protection Guidelines</h3>
+                <p>We strongly advocate for responsible trading. Never trade with money that you cannot afford to lose, such as funds intended for rent, food, or essential living expenses. Always use risk management tools like stop-loss orders where available.</p>
+              </section>
 
-              <h3 className="text-white font-bold uppercase text-xs">3. Not Financial Advice</h3>
-              <p>Tele Trader is a tool, not a financial advisor. We do not provide investment advice. You must make your own trading decisions.</p>
+              <section className="space-y-2">
+                <h3 className="text-white font-bold uppercase text-xs">3. Market Volatility</h3>
+                <p>Markets can be highly volatile. Prices can fluctuate wildly within seconds. Ensure you fully understand the mechanics of the contracts you are executing before committing real funds.</p>
+              </section>
 
-              <h3 className="text-white font-bold uppercase text-xs">4. User Responsibility</h3>
-              <p>You are responsible for understanding the risks involved and for managing your own risk. Use stop-losses and trade responsibly.</p>
+              <section className="space-y-2">
+                <h3 className="text-white font-bold uppercase text-xs">4. Continuous Education</h3>
+                <p>Successful trading requires ongoing education and disciplined emotional control. Utilize demo accounts to practice your strategies before transitioning to real-money trading.</p>
+              </section>
             </div>
             <Footer />
           </div>
@@ -1566,7 +1742,7 @@ const App: React.FC = () => {
                 <h3 className="text-sm font-black uppercase mb-2">Telegram Support</h3>
                 <p className="text-xs text-gray-400 mb-6">Get instant help from our support team via Telegram.</p>
                 <button 
-                  onClick={() => window.open('https://t.me/teletradersupportbot', '_blank')}
+                  onClick={() => window.open('https://t.me/bynextradersupportbot', '_blank')}
                   className="w-full py-4 bg-red-600 rounded-2xl font-black text-sm uppercase shadow-lg shadow-red-600/20 hover:bg-red-500 transition-colors flex items-center justify-center gap-2"
                 >
                   <Smartphone className="w-5 h-5" />
@@ -1579,8 +1755,8 @@ const App: React.FC = () => {
                   <Globe className="w-5 h-5 text-gray-400" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black text-gray-500 uppercase">Website</p>
-                  <p className="text-sm font-black text-white">https://bit.ly/tele-support</p>
+                  <p className="text-[10px] font-black text-gray-500 uppercase">Telegram Support</p>
+                  <p className="text-sm font-black text-white">@bynextradersupportbot</p>
                 </div>
               </div>
             </div>
@@ -1597,7 +1773,7 @@ const App: React.FC = () => {
     <div className="flex flex-col h-screen bg-[#0b0e14] text-white overflow-hidden font-sans">
       <header className="min-h-[3.5rem] pt-[env(safe-area-inset-top)] bg-[#141922] border-b border-white/10 px-4 flex items-center justify-between z-50 flex-shrink-0">
         <div className="flex flex-col">
-          <h1 className="text-base font-black italic tracking-tighter text-red-500 leading-none">TELE TRADER</h1>
+          <h1 className="text-base font-black italic tracking-tighter text-red-500 leading-none">BYNEX TRADER</h1>
           <div className="flex items-center gap-1.5 mt-0.5">
             <div className={`w-1.5 h-1.5 rounded-full ${
               isConnected ? 'bg-green-500 animate-pulse' : 
@@ -1621,7 +1797,7 @@ const App: React.FC = () => {
           )}
           <div onClick={() => setShowAccountMenu(true)} className="flex flex-col items-end cursor-pointer group bg-white/5 px-2 py-1 rounded-lg border border-white/5 hover:border-red-500/30 transition-all">
             <span className="text-xs font-mono font-black tabular-nums group-hover:text-red-500 transition-colors">
-              {account ? `${account.balance.toFixed(getCurrencyConfig(account.currency).decimals)} ${account.currency}` : '0.00 USD'}
+              {account ? `${Number(account.balance).toFixed(getCurrencyConfig(account.currency).decimals)} ${account.currency}` : '0.00 USD'}
             </span>
             <div className="flex items-center gap-1">
               <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter">
@@ -1636,10 +1812,10 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className={`flex-1 relative ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-32'}`}>
+      <main className={`flex-1 relative ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-28'}`}>
         {renderContent()}
         {currentView !== AppView.TRADE && (
-          <div className="py-4 pb-8 text-center opacity-60">
+          <div className="py-6 pb-12 text-center opacity-60">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50">Powered by Deriv</p>
             <p className="text-[8px] font-bold uppercase tracking-widest mt-1 text-white/40">Secure Trading • 18+ • Responsible Trading</p>
           </div>
@@ -1660,7 +1836,7 @@ const App: React.FC = () => {
               <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-2">
                 <ShieldAlert className="w-6 h-6 text-red-500" />
               </div>
-              <h3 className="text-lg font-black uppercase">Teletrader</h3>
+              <h3 className="text-lg font-black uppercase">Bynex Trader</h3>
               <p className="text-sm font-bold text-gray-400">{customAlert}</p>
               <button 
                 onClick={() => setCustomAlert(null)}
@@ -1865,8 +2041,8 @@ const App: React.FC = () => {
 
               {!account && (
                 <div className="space-y-3">
-                  <button onClick={signup} className="w-full py-4 bg-red-600 rounded-2xl font-black text-sm uppercase shadow-lg shadow-red-600/20 hover:bg-red-500 transition-colors">Open Free Account</button>
-                  <button onClick={login} className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl font-black text-sm uppercase hover:bg-white/10 transition-colors">Login to Deriv</button>
+                  <button onClick={signup} className="w-full py-4 bg-red-600 rounded-2xl font-black text-sm uppercase shadow-lg shadow-red-600/20 hover:bg-red-500 transition-colors">Register</button>
+                  <button onClick={login} className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl font-black text-sm uppercase hover:bg-white/10 transition-colors">Login</button>
                 </div>
               )}
 
@@ -1899,10 +2075,10 @@ const App: React.FC = () => {
             
             <div className="space-y-3 pt-4">
               <button onClick={login} className="w-full py-4 bg-red-600 rounded-2xl font-black text-sm uppercase shadow-lg shadow-red-600/20 hover:bg-red-500 transition-colors">
-                Login to Deriv
+                Login
               </button>
               <button onClick={signup} className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl font-black text-sm uppercase hover:bg-white/10 transition-colors">
-                Create Free Account
+                Register
               </button>
             </div>
             
@@ -1925,7 +2101,7 @@ const App: React.FC = () => {
             <div className="space-y-6 text-sm text-gray-300">
               <section>
                 <h4 className="text-white font-bold uppercase mb-2">1. Getting Started</h4>
-                <p>Welcome to Tele Trader! To start trading, you need to log in with your Deriv account. If you don't have one, you can create a free account using the "Open Free Account" button in the profile menu.</p>
+                <p>Welcome to Bynex Trader! To start trading, you need to log in with your Deriv account. If you don't have one, you can create a free account using the "Register" button in the profile menu.</p>
               </section>
 
               <section>

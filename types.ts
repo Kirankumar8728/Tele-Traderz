@@ -71,9 +71,9 @@ export interface TradeHistory {
   underlying_symbol: string;
   buy_price: number;
   sell_price?: number;
-  status: 'open' | 'won' | 'lost' | 'sold';
+  status: 'open' | 'won' | 'lost' | 'sold' | 'draw';
   type: string;
-  entry_tick: number;
+  entry_tick?: number;
   exit_tick?: number;
   entry_time: number;
   exit_time?: number;

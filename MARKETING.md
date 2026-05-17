@@ -1,4 +1,4 @@
-# Tele Trader - Marketing Assets
+# Bynex Trader - Marketing Assets
 
 ## App Assets
 - **App Icon:** `/public/app-icon.png` (Generated automatically on server startup)
@@ -10,10 +10,10 @@
 4. **Commands:** No special commands needed besides `/start`.
 
 ## App Description
-Tele Trader is a high-performance trading interface for Deriv, optimized for speed and precision. Trade Synthetic Indices and Forex directly from Telegram with real-time charts, instant execution, and a built-in commission reward system.
+Bynex Trader is a high-performance trading interface for Deriv, optimized for speed and precision. Trade Synthetic Indices and Forex directly from Telegram with real-time charts, instant execution, and a built-in commission reward system.
 
 ## Telegram Intro Description
-🚀 **Welcome to Tele Trader!**
+🚀 **Welcome to Bynex Trader!**
 
 The fastest way to trade Synthetic Indices and Forex directly from Telegram.
 

@@ -1,12 +1,16 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from './firebase-applet-config.json';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Use initializeFirestore with settings for better compatibility in restricted environments
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, firebaseConfig.firestoreDatabaseId);
 export const googleProvider = new GoogleAuthProvider();
 
 // Error Handling Spec for Firestore Permissions
@@ -38,9 +42,12 @@ export interface FirestoreErrorInfo {
   }
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+export function handleFirestoreError(error: any, operationType: OperationType, path: string | null) {
+  const errorMessage = error?.message || String(error);
+  const errorCode = error?.code || 'unknown';
+  
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: `${errorCode}: ${errorMessage}`,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -57,17 +64,28 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  console.error(`[Firestore Error - ${operationType}] at ${path}:`, errorMessage);
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Validate Connection to Firestore
-async function testConnection() {
+// Validate Connection to Firestore with limited retries
+async function testConnection(retries = 3) {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. The client is offline.");
+    console.log("Firestore connection verified.");
+  } catch (error: any) {
+    const errorMsg = error?.message || String(error);
+    if (retries > 0) {
+      console.warn(`Firestore connection retry ${4 - retries}... (${errorMsg})`);
+      setTimeout(() => testConnection(retries - 1), 5000);
+    } else {
+      if (errorMsg.includes('the client is offline') || error?.code === 'unavailable') {
+        console.error("Firestore is currently unavailable or offline. The app will continue in offline mode.");
+      } else if (errorMsg.includes('permission-denied') || error?.code === 'permission-denied') {
+        console.warn("Firestore connection check: Permission denied (this is normal if rules are tight).");
+      } else {
+        console.error("Firestore connection failed explicitly:", errorMsg);
+      }
     }
   }
 }

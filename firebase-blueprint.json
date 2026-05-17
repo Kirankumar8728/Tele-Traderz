@@ -1,38 +1,80 @@
 {
   "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "createdAt": { "type": "integer" },
+        "displayName": { "type": "string" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "User trading account details",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "balance": { "type": "number" },
+        "currency": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["userId", "balance", "currency", "isActive"]
+    },
+    "Trade": {
+      "title": "Trade",
+      "description": "Trading position history",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "contractId": { "type": "string" },
+        "symbol": { "type": "string" },
+        "type": { "type": "string" },
+        "buyPrice": { "type": "number" },
+        "sellPrice": { "type": "number" },
+        "status": { "type": "string", "enum": ["open", "won", "lost", "sold"] },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["userId", "contractId", "symbol", "type", "buyPrice", "status", "createdAt"]
+    },
     "Withdrawal": {
       "title": "Withdrawal",
-      "description": "A withdrawal request from a user",
+      "description": "Withdrawal request details",
       "type": "object",
       "properties": {
-        "userId": { "type": "string", "description": "The ID of the user requesting withdrawal" },
-        "amount": { "type": "number", "description": "The amount to withdraw" },
-        "method": { "type": "string", "description": "The withdrawal method (e.g., USDT, Bank)" },
-        "address": { "type": "string", "description": "The destination address or account number" },
-        "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "description": "Current status of the request" },
-        "timestamp": { "type": "string", "format": "date-time", "description": "When the request was made" },
-        "rejectionReason": { "type": "string", "description": "Reason for rejection if applicable" }
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "method": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "paid", "rejected"] },
+        "timestamp": { "type": "integer" },
+        "details": { "type": "object" }
       },
-      "required": ["userId", "amount", "method", "address", "status", "timestamp"]
-    },
-    "UserBalance": {
-      "title": "User Balance",
-      "description": "The referral balance for a user",
-      "type": "object",
-      "properties": {
-        "balance": { "type": "number", "description": "The current referral balance" }
-      },
-      "required": ["balance"]
+      "required": ["userId", "amount", "method", "status", "timestamp"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/users/{userId}/accounts/{accountId}": {
+      "schema": "Account",
+      "description": "Trading accounts for the user"
+    },
+    "/users/{userId}/trades/{tradeId}": {
+      "schema": "Trade",
+      "description": "Trading positions for the user"
+    },
     "/withdrawals/{withdrawalId}": {
       "schema": "Withdrawal",
-      "description": "Collection of all withdrawal requests"
+      "description": "Global withdrawal requests"
     },
-    "/balances/{userId}": {
-      "schema": "UserBalance",
-      "description": "Mapping of user IDs to their referral balances"
+    "/test/{connection}": {
+       "schema": { "type": "object" },
+       "description": "Connection test path"
     }
   }
 }
