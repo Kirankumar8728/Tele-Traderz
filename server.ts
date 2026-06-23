@@ -101,7 +101,7 @@ try {
 // Telegram Bot & Engagements
 // ============================================================================
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const APP_URL = "https://ais-dev-z23cim5lqjemrj363e6x2r-81414754947.asia-east1.run.app";
+const APP_URL = process.env.APP_URL || "https://ais-dev-z23cim5lqjemrj363e6x2r-81414754947.asia-east1.run.app";
 
 let bot: TelegramBot | null = null;
 let isStoppingBot = false;
@@ -272,7 +272,7 @@ async function startServer() {
     saveUninitialized: false,
     cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, maxAge: 3600000 }
   }));
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json());
   

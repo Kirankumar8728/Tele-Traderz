@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: bynex-trader
+    env: node
+    plan: free # Can be upgraded to starter/hobby in Render settings
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: APP_URL
+        sync: false
+        description: "The live URL of this Render web service (e.g., https://bynex-trader.onrender.com)"
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: VITE_DERIV_CLIENT_ID
+        sync: false
+        description: "Your Deriv OAuth App ID / Client ID"
+      - key: VITE_DERIV_APP_ID
+        sync: false
+        description: "Your Deriv App ID (often identical to Client ID)"
+      - key: VITE_REDIRECT_URI
+        sync: false
+        description: "Your Deriv OAuth redirect URI (e.g., https://bynex-trader.onrender.com/callback)"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+        optional: true
+        description: "Your Telegram Bot Access Token (optional if not using Telegram Integration)"
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+        optional: true
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+        optional: true
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+        optional: true
+      - key: GEMINI_API_KEY
+        sync: false
+        optional: true
