@@ -1,7 +1,7 @@
 // Fetch environment variables with fallbacks
 // Note: In Vite, variables must be prefixed with VITE_ to be available on the client side.
-export const OAUTH_CLIENT_ID = import.meta.env.VITE_DERIV_CLIENT_ID;
-export const NEW_APP_ID = import.meta.env.VITE_DERIV_APP_ID;
+export const OAUTH_CLIENT_ID = import.meta.env.VITE_DERIV_CLIENT_ID || '32FjINZV8sXfdKQcVvnZf';
+export const NEW_APP_ID = import.meta.env.VITE_DERIV_APP_ID || '32FjINZV8sXfdKQcVvnZf';
 const AFFILIATE_ID = import.meta.env.VITE_DERIV_AFFILIATE_ID;
 export const OAUTH_SCOPE =
   import.meta.env.VITE_DERIV_SCOPE ||
@@ -9,21 +9,13 @@ export const OAUTH_SCOPE =
 const SIDC = import.meta.env.VITE_DERIV_SIDC;
 const UTM_CAMPAIGN = import.meta.env.VITE_DERIV_UTM_CAMPAIGN;
 
-if (!OAUTH_CLIENT_ID) {
-  throw new Error("Missing VITE_DERIV_CLIENT_ID. Please set this in your environment variables.");
-}
-
-if (!NEW_APP_ID) {
-  throw new Error("Missing VITE_DERIV_APP_ID. Please set this in your environment variables.");
-}
-
 /**
  * Dynamically determines the redirect URI based on current environment.
  */
 export const getRedirectUri = () => {
   const uri = import.meta.env.VITE_REDIRECT_URI || `${window.location.origin}/callback`;
   if (!uri.startsWith('https://') && !uri.startsWith('http://localhost') && !uri.startsWith('http://127.0.0.1')) {
-    throw new Error('Invalid redirect URI: Must start with https:// or be localhost');
+    console.warn('Invalid redirect URI check: Typically must start with https:// or be localhost for development');
   }
   return uri;
 };

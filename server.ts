@@ -688,7 +688,7 @@ async function startServer() {
   } else {
     // Production serving
     app.use(express.static(path.join(__dirname, "dist")));
-    app.get(/(.*)/, (req: express.Request, res: express.Response) => {
+    app.get('*all', (req: express.Request, res: express.Response) => {
       res.sendFile(path.join(__dirname, "dist", "index.html"));
     });
   }
