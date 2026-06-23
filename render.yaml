@@ -3,7 +3,7 @@ services:
     name: bynex-trader
     env: node
     plan: free # Can be upgraded to starter/hobby in Render settings
-    buildCommand: npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV

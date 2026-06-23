@@ -1943,7 +1943,7 @@ const App: React.FC = () => {
                     return (
                       <>
                         {displayedAccounts.map((acc: any) => {
-                          const liveAcc = availableAccounts.find(a => a.loginid === acc.id);
+                          const liveAcc = availableAccounts.find((a: any) => a.loginid === acc.id);
                           return (
                             <div key={acc.id} className="space-y-2">
                               <button 
