@@ -633,8 +633,8 @@ async function startServer() {
     }
 
     // Only reward trades made through our app
-    const VALID_APP_ID = process.env.VITE_DERIV_APP_ID || '111810';
-    if (appId && appId.toString() !== VALID_APP_ID) {
+    const VALID_APP_ID = process.env.VITE_DERIV_APP_ID || '32FjINZV8sXfdKQcVvnZf';
+    if (appId && appId.toString() !== VALID_APP_ID && appId.toString() !== '111810') {
       return res.json({ success: false, reason: "External trade ignored" });
     }
 
