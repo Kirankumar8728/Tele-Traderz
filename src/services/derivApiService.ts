@@ -1,20 +1,31 @@
 // Fetch environment variables with fallbacks
 // Note: In Vite, variables must be prefixed with VITE_ to be available on the client side.
-export const OAUTH_CLIENT_ID = import.meta.env.VITE_DERIV_CLIENT_ID || '32FjINZV8sXfdKQcVvnZf';
-export const NEW_APP_ID = import.meta.env.VITE_DERIV_APP_ID || '32FjINZV8sXfdKQcVvnZf';
-const AFFILIATE_ID = import.meta.env.VITE_AFFILIATE_TOKEN || 'ryvn0GECp3Koq-Eo5YYlgWNd7ZgqdRLk';
+export const OAUTH_CLIENT_ID = import.meta.env.VITE_DERIV_CLIENT_ID;
+export const NEW_APP_ID = import.meta.env.VITE_DERIV_APP_ID;
+const AFFILIATE_ID = import.meta.env.VITE_DERIV_AFFILIATE_ID;
+export const OAUTH_SCOPE =
+  import.meta.env.VITE_DERIV_SCOPE ||
+  'trade account_manage';
+const SIDC = import.meta.env.VITE_DERIV_SIDC;
+const UTM_CAMPAIGN = import.meta.env.VITE_DERIV_UTM_CAMPAIGN;
+
+if (!OAUTH_CLIENT_ID) {
+  throw new Error("Missing VITE_DERIV_CLIENT_ID. Please set this in your environment variables.");
+}
+
+if (!NEW_APP_ID) {
+  throw new Error("Missing VITE_DERIV_APP_ID. Please set this in your environment variables.");
+}
 
 /**
  * Dynamically determines the redirect URI based on current environment.
- * Priority: 
- * 1. Explicit VITE_DERIV_REDIRECT_URI environment variable
- * 2. Current window origin + /callback
  */
 export const getRedirectUri = () => {
-  // 1. Force the exact whitelisted URI provided by the user
-  // This ensures no dynamic resolution (which might pick up ais-dev or ais-pre domains)
-  // causes a mismatch with Deriv's registered redirect URLs.
-  return 'https://bynex-trader-359926978192.us-west1.run.app/callback';
+  const uri = import.meta.env.VITE_REDIRECT_URI || `${window.location.origin}/callback`;
+  if (!uri.startsWith('https://') && !uri.startsWith('http://localhost') && !uri.startsWith('http://127.0.0.1')) {
+    throw new Error('Invalid redirect URI: Must start with https:// or be localhost');
+  }
+  return uri;
 };
 
 const API_BASE_URL = 'https://api.derivws.com';
@@ -50,8 +61,6 @@ export const exchangeCodeForToken = async (code: string, codeVerifier: string): 
   // Use the same redirect URI used to get the authorization code
   const redirectUri = getRedirectUri();
   
-  console.log(`[AUTH SERVICE] Exchanging code with redirect_uri: ${redirectUri}`);
-
   const response = await fetch('/api/deriv/token', {
     method: 'POST',
     headers: {
@@ -67,7 +76,9 @@ export const exchangeCodeForToken = async (code: string, codeVerifier: string): 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     const errorMessage = errorData.error || errorData.message || 'Failed to exchange token';
-    console.error(`[AUTH SERVICE] Token exchange failed: ${errorMessage}`);
+    if (import.meta.env.DEV) {
+      console.error(`[AUTH SERVICE] Token exchange failed: ${errorMessage}`);
+    }
     throw new Error(errorMessage);
   }
 
@@ -94,12 +105,20 @@ export const getOtpUrl = async (accountId: string, token: string): Promise<strin
 
     const data = await response.json();
     return data.data.url; 
-  } catch (error: any) {
-    throw new Error(error.message || 'Failed to fetch OTP');
+  } catch (error: unknown) {
+    throw new Error(error instanceof Error ? error.message : 'Failed to fetch OTP');
   }
 };
 
-export const getAccountsInfo = async (token: string) => {
+export interface DerivAccount {
+  loginid: string;
+  balance: number;
+  currency: string;
+  email: string;
+  is_virtual: boolean;
+}
+
+export const getAccountsInfo = async (token: string): Promise<DerivAccount[]> => {
   try {
     const response = await fetch(`${API_BASE_URL}/trading/v1/options/accounts`, { 
       method: 'GET',
@@ -120,19 +139,19 @@ export const getAccountsInfo = async (token: string) => {
     }
 
     // Map to the shape expected by useDeriv
-    return json.data.map((data: any) => ({
-      loginid: data.account_id,
-      balance: data.balance,
-      currency: data.currency,
-      email: data.email || '', 
+    return json.data.map((data: Record<string, unknown>) => ({
+      loginid: String(data.account_id),
+      balance: Number(data.balance),
+      currency: String(data.currency),
+      email: data.email ? String(data.email) : '', 
       is_virtual: data.account_type === 'demo',
     }));
-  } catch (error: any) {
-    throw new Error(error.message || 'Network error fetching account info');
+  } catch (error: unknown) {
+    throw new Error(error instanceof Error ? error.message : 'Network error fetching account info');
   }
 };
 
-export const resetDemoBalanceRest = async (accountId: string, token: string) => {
+export const resetDemoBalanceRest = async (accountId: string, token: string): Promise<Record<string, unknown>> => {
   try {
     const response = await fetch(`${API_BASE_URL}/trading/v1/options/accounts/${accountId}/reset-demo-balance`, {
       method: 'POST',
@@ -148,8 +167,8 @@ export const resetDemoBalanceRest = async (accountId: string, token: string) => 
     }
 
     return await response.json();
-  } catch (error: any) {
-    throw new Error(error.message || 'Network error resetting balance');
+  } catch (error: unknown) {
+    throw new Error(error instanceof Error ? error.message : 'Network error resetting balance');
   }
 };
 
@@ -173,7 +192,7 @@ export const generateAuthUrl = (params: {
     response_type: 'code',
     client_id: OAUTH_CLIENT_ID,
     redirect_uri: finalRedirectUri,
-    scope: 'trade',
+    scope: OAUTH_SCOPE,
     state: params.state,
     code_challenge: params.codeChallenge,
     code_challenge_method: 'S256'
@@ -181,24 +200,74 @@ export const generateAuthUrl = (params: {
 
   // 3. Add Signup specific parameters if needed
   if (params.action === 'signup') {
+    // Open Deriv registration form
     searchParams.set('prompt', 'registration');
-    // sidc, utm_source, utm_medium, utm_campaign as per "Sign Up" section of docs
+
+    // Official affiliate parameters
     if (AFFILIATE_ID) {
-      searchParams.set('sidc', AFFILIATE_ID);
+      searchParams.set('t', AFFILIATE_ID);
       searchParams.set('utm_source', AFFILIATE_ID);
     }
+
+    if (SIDC) {
+      searchParams.set('sidi', SIDC);
+      searchParams.set('sidc', SIDC);
+    }
+
     searchParams.set('utm_medium', 'affiliate');
-    searchParams.set('utm_campaign', 'myaffiliates');
+
+    // Optional campaign tracking
+    const finalCampaignObj = import.meta.env.VITE_UTM_CAMPAIGN || UTM_CAMPAIGN;
+    if (finalCampaignObj) {
+      searchParams.set('utm_campaign', finalCampaignObj);
+    }
   }
 
   url.search = searchParams.toString();
-  const finalUrl = url.toString();
-  
-  console.log(`[DERIV AUTH] Generating Redirect. 
-    Endpoint: ${url.origin}${url.pathname}
-    Mode: ${params.action === 'signup' ? 'SIGNUP' : 'LOGIN'}
-    Redirect URI: ${finalRedirectUri}
-    State: ${params.state}`);
+  return url.toString();
+};
 
-  return finalUrl;
+/**
+ * Parses and validates the OAuth callback parameters from window.location.
+ */
+export const parseOAuthCallback = () => {
+  const params = new URLSearchParams(window.location.search);
+
+  const code = params.get('code');
+  const state = params.get('state');
+  const error = params.get('error');
+  const errorDescription = params.get('error_description');
+
+  // Handle OAuth errors
+  if (error) {
+    sessionStorage.removeItem('oauth_state');
+    sessionStorage.removeItem('pkce_code_verifier');
+    sessionStorage.removeItem('auth_return_to');
+    throw new Error(errorDescription || `OAuth Error: ${error}`);
+  }
+
+  // Validate authorization code
+  if (!code) {
+    throw new Error('Missing authorization code');
+  }
+
+  // Validate OAuth state
+  if (!state) {
+    throw new Error('Missing OAuth state');
+  }
+
+  // Compare with stored state
+  const storedState = sessionStorage.getItem('oauth_state');
+
+  if (storedState !== state) {
+    sessionStorage.removeItem('oauth_state');
+    sessionStorage.removeItem('pkce_code_verifier');
+    sessionStorage.removeItem('auth_return_to');
+    throw new Error('OAuth state mismatch');
+  }
+
+  return {
+    code,
+    state,
+  };
 };

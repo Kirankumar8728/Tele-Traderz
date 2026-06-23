@@ -368,13 +368,50 @@ async function startServer() {
       }
 
       console.log("[AUTH SUCCESS] Token exchange completed successfully");
-      res.json(data);
+
+      // Secure session recovery without localStorage exposure
+      req.session.tokens = {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at: Date.now() + (data.expires_in * 1000)
+      };
+
+      res.json({
+        access_token: data.access_token,
+        expires_in: data.expires_in,
+        token_type: data.token_type
+      });
     } catch (error: any) {
       console.error("[AUTH CRITICAL ERROR] Exception during token exchange:", error);
       res.status(500).json({ 
         error: "Internal server error during authentication exchange", 
         message: error.message 
       });
+    }
+  });
+
+  // ============================================================================
+  // Session Recovery & Logout Routes
+  // ============================================================================
+  app.get("/api/deriv/session", (req: express.Request, res: express.Response) => {
+    if (req.session?.tokens?.access_token) {
+      // Return token from secure server session
+      res.json({ 
+        access_token: req.session.tokens.access_token,
+        expires_at: req.session.tokens.expires_at 
+      });
+    } else {
+      res.status(401).json({ error: "No active secure session" });
+    }
+  });
+
+  app.post("/api/deriv/logout", (req: express.Request, res: express.Response) => {
+    if (req.session) {
+      req.session.destroy(() => {
+        res.json({ success: true });
+      });
+    } else {
+      res.json({ success: true });
     }
   });
 
@@ -596,7 +633,7 @@ async function startServer() {
     }
 
     // Only reward trades made through our app
-    const VALID_APP_ID = '32FjINZV8sXfdKQcVvnZf';
+    const VALID_APP_ID = process.env.VITE_DERIV_APP_ID || '111810';
     if (appId && appId.toString() !== VALID_APP_ID) {
       return res.json({ success: false, reason: "External trade ignored" });
     }

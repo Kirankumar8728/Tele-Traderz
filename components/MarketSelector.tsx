@@ -262,4 +262,4 @@ const MarketSelector: React.FC<MarketSelectorProps> = ({ markets, selectedSymbol
   );
 };
 
-export default MarketSelector;
+export default React.memo(MarketSelector);

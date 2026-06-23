@@ -424,4 +424,4 @@ const TradeForm: React.FC<TradeFormProps> = ({
   );
 };
 
-export default TradeForm;
+export default React.memo(TradeForm);

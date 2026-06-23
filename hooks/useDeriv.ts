@@ -3,8 +3,20 @@ import { DERIV_WS_URL } from '../constants';
 import { DerivAccount, Market, Proposal, TradeHistory, TradeType, Timeframe } from '../types';
 import { db } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { generateCodeVerifier, generateCodeChallenge, generateState } from '../src/lib/pkce';
-import { OAUTH_CLIENT_ID, getRedirectUri, getOtpUrl, getAccountsInfo, generateAuthUrl, resetDemoBalanceRest } from '../src/services/derivApiService';
+import {
+  generateCodeVerifier,
+  generateCodeChallenge,
+  generateState,
+} from '../src/lib/pkce';
+import {
+  OAUTH_CLIENT_ID,
+  getRedirectUri,
+  getOtpUrl,
+  getAccountsInfo,
+  generateAuthUrl,
+  resetDemoBalanceRest,
+} from '../src/services/derivApiService';
+import { getInMemoryToken, clearInMemoryToken } from '../src/services/authService';
 
 // ============================================================================
 // Utility / Helpers
@@ -97,7 +109,9 @@ export const useDeriv = () => {
     publicWs.current = socket;
 
     socket.onopen = () => {
-      console.log('Deriv Public WebSocket Connected');
+      if (import.meta.env.DEV) {
+        console.log('Deriv Public WebSocket Connected');
+      }
       setIsConnected(true);
       setIsReconnecting(false);
       
@@ -111,6 +125,21 @@ export const useDeriv = () => {
 
       // Fetch markets immediately with a req_id
       socket.send(JSON.stringify({ active_symbols: 'brief', req_id: 1 }));
+
+      // Restore active proposals hosted on this specific WebSocket
+      Object.entries(lastProposalParams.current).forEach(([type, params]) => {
+        if (!authWs.current || authWs.current.readyState !== WebSocket.OPEN) {
+          pendingProposals.current.add(type);
+          socket.send(JSON.stringify({
+            proposal: 1,
+            subscribe: 1,
+            basis: 'stake',
+            currency: 'USD',
+            ...params,
+            req_id: type === 'CALL' || type === 'HIGHER' || type === 'TOUCH' || type === 'ONETOUCH' ? 100 : 200
+          }));
+        }
+      });
     };
 
     socket.onmessage = (msg) => {
@@ -148,7 +177,9 @@ export const useDeriv = () => {
           return newTick;
         });
       } else if (data.msg_type === 'proposal') {
-        console.log('[DEBUG PUBLIC] Proposal Received:', data);
+        if (import.meta.env.DEV) {
+          console.log('[DEBUG PUBLIC] Proposal Received:', data);
+        }
         const pType = data.echo_req?.contract_type;
         if (!pType) return;
         pendingProposals.current.delete(pType);
@@ -177,7 +208,9 @@ export const useDeriv = () => {
     };
 
     socket.onclose = (event) => {
-      console.log(`Deriv Public WebSocket Closed (Code: ${event.code}, Reason: ${event.reason || 'None'}). Reconnecting...`);
+      if (import.meta.env.DEV) {
+        console.log(`Deriv Public WebSocket Closed (Code: ${event.code}, Reason: ${event.reason || 'None'}). Reconnecting...`);
+      }
       if (pingIntervalPublic.current) clearInterval(pingIntervalPublic.current);
       setError('Connection dropped. Reconnecting to Deriv...');
       
@@ -195,15 +228,21 @@ export const useDeriv = () => {
     if (authWs.current?.readyState === WebSocket.OPEN || authWs.current?.readyState === WebSocket.CONNECTING) return;
 
     try {
-      console.log(`[DERIV] Obtaining OTP for account: ${accountId}`);
+      if (import.meta.env.DEV) {
+        console.log(`[DERIV] Obtaining OTP for account: ${accountId}`);
+      }
       const authUrl = await getOtpUrl(accountId, token);
-      console.log(`[DERIV] Connecting to authenticated WebSocket: ${authUrl.split('?')[0]}...`);
+      if (import.meta.env.DEV) {
+        console.log(`[DERIV] Connecting to authenticated WebSocket: ${authUrl.split('?')[0]}...`);
+      }
       
       const socket = new WebSocket(authUrl);
       authWs.current = socket;
 
       socket.onopen = () => {
-        console.log('Deriv Authenticated WebSocket Connected via OTP');
+        if (import.meta.env.DEV) {
+          console.log('Deriv Authenticated WebSocket Connected via OTP');
+        }
         setError(null);
         setIsConnected(true);
         setIsReconnecting(false);
@@ -222,6 +261,19 @@ export const useDeriv = () => {
         socket.send(JSON.stringify({ profit_table: 1, limit: 50, description: 1 }));
         socket.send(JSON.stringify({ statement: 1, limit: 50, description: 1 }));
         socket.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
+
+        // Restore active proposals hosted on this specific WebSocket
+        Object.entries(lastProposalParams.current).forEach(([type, params]) => {
+          pendingProposals.current.add(type);
+          socket.send(JSON.stringify({
+            proposal: 1,
+            subscribe: 1,
+            basis: 'stake',
+            currency: 'USD',
+            ...params,
+            req_id: type === 'CALL' || type === 'HIGHER' || type === 'TOUCH' || type === 'ONETOUCH' ? 100 : 200
+          }));
+        });
       };
 
       socket.onerror = (error) => {
@@ -230,7 +282,9 @@ export const useDeriv = () => {
 
       socket.onmessage = (msg) => {
         const data = JSON.parse(msg.data);
-        console.log('[DEBUG AUTH] Received:', data.msg_type, data);
+        if (import.meta.env.DEV) {
+          console.log('[DEBUG AUTH] Received:', data.msg_type, data);
+        }
         
         if (data.error) {
           setError(data.error.message);
@@ -247,7 +301,7 @@ export const useDeriv = () => {
             if (data.balance.accounts) {
               const accountsMap = data.balance.accounts;
               setAccount(prev => prev && accountsMap[prev.loginid] ? { ...prev, balance: accountsMap[prev.loginid].balance } : prev);
-              setAvailableAccounts(prev => prev.map((acc: any) => 
+              setAvailableAccounts(prev => prev.map(acc => 
                 accountsMap[acc.loginid] ? { ...acc, balance: accountsMap[acc.loginid].balance } : acc
               ));
             } else {
@@ -327,10 +381,10 @@ export const useDeriv = () => {
           case 'profit_table':
             setIsHistoryLoading(false);
             if (data.profit_table?.transactions) {
-              const profitData = data.profit_table.transactions.map((t: any) => {
-                const profitLoss = parseFloat(t.profit_loss || '0');
-                const sellPrice = parseFloat(t.sell_price || '0');
-                const buyPrice = parseFloat(t.buy_price || '0');
+              const profitData = data.profit_table.transactions.map((t: Record<string, unknown>) => {
+                const profitLoss = parseFloat(String(t.profit_loss || '0'));
+                const sellPrice = parseFloat(String(t.sell_price || '0'));
+                const buyPrice = parseFloat(String(t.buy_price || '0'));
                 
                 // User wants Gross Payout (+Total) for wins, Net Loss (-Stake) for losses
                 const displayProfit = profitLoss > 0 ? sellPrice : (profitLoss < 0 ? profitLoss : (sellPrice > 0 ? sellPrice : -buyPrice));
@@ -357,9 +411,9 @@ export const useDeriv = () => {
             // Only update history from statement if we don't have better data
             // Filter to only include completed trade transactions (sell/payout) or adjustments
             const statementData = data.statement.transactions
-              .filter((t: any) => t.contract_id && t.action_type === 'sell') // Only include sell (payout) entries
-              .map((t: any) => {
-                const amount = parseFloat(t.amount || '0');
+              .filter((t: Record<string, unknown>) => t.contract_id && t.action_type === 'sell') // Only include sell (payout) entries
+              .map((t: Record<string, unknown>) => {
+                const amount = parseFloat(String(t.amount || '0'));
                 return {
                   contract_id: Number(t.contract_id),
                   underlying_symbol: t.display_name,
@@ -393,7 +447,9 @@ export const useDeriv = () => {
             if (data.cashier) window.open(data.cashier, '_blank');
             break;
           case 'proposal':
-            console.log('[DEBUG AUTH] Proposal Received:', data);
+            if (import.meta.env.DEV) {
+              console.log('[DEBUG AUTH] Proposal Received:', data);
+            }
             const pType = data.echo_req?.contract_type;
             if (!pType) break;
             pendingProposals.current.delete(pType);
@@ -415,22 +471,32 @@ export const useDeriv = () => {
       };
 
       socket.onclose = (event) => {
-        console.log(`Deriv Auth WebSocket Closed (Code: ${event.code}, Reason: ${event.reason || 'None'}).`);
+        if (import.meta.env.DEV) {
+          console.log(`Deriv Auth WebSocket Closed (Code: ${event.code}, Reason: ${event.reason || 'None'}).`);
+        }
         if (pingIntervalAuth.current) clearInterval(pingIntervalAuth.current);
         setIsReconnecting(true);
         setError('Secure connection lost. Reconnecting...');
         
-        const token = localStorage.getItem('deriv_access_token');
+        const memToken = getInMemoryToken();
+        const token = memToken.accessToken;
+        const expiresAt = memToken.expiresAt;
         const activeAcc = localStorage.getItem('deriv_active_account');
+        
         if (token && activeAcc) {
+          if (expiresAt && Date.now() > expiresAt) {
+            import('../src/services/authService').then(mod => mod.performLogout());
+            setAccount(null);
+            setAvailableAccounts([]);
+            return;
+          }
           const delay = getReconnectDelay(attempt);
-          // Use a ref to call the latest version if needed, but here we can just accept this circular dep for now.
           authReconnectTimeout.current = setTimeout(() => connectAuthRef.current(token, activeAcc, attempt + 1), delay);
         }
       };
-    } catch (err: any) {
-      console.error('Auth Connection Err:', err);
-      setError('Authentication Connection Failed: ' + err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError('Authentication Connection Failed: ' + errorMessage);
       
       const delay = getReconnectDelay(attempt);
       authReconnectTimeout.current = setTimeout(() => connectAuthRef.current(token, accountId, attempt + 1), delay);
@@ -438,16 +504,26 @@ export const useDeriv = () => {
   }, [getReconnectDelay]);
 
   const initAuth = useCallback(async () => {
-    const accessToken = localStorage.getItem('deriv_access_token');
-    const expiresAt = localStorage.getItem('deriv_token_expires_at');
+    let memToken = getInMemoryToken();
+    
+    // Attempt session recovery if no token in memory
+    if (!memToken.accessToken) {
+      const { recoverSession } = await import('../src/services/authService');
+      const recovered = await recoverSession();
+      if (recovered) {
+        memToken = getInMemoryToken();
+      }
+    }
+
+    const accessToken = memToken.accessToken;
+    const expiresAt = memToken.expiresAt;
     
     // Check token expiry before using it
-    if (expiresAt && Date.now() > parseInt(expiresAt)) {
-      console.warn('[AUTH] Token expired. Clearing session.');
-      localStorage.removeItem('deriv_access_token');
-      localStorage.removeItem('deriv_active_account');
-      localStorage.removeItem('deriv_token_expires_at');
+    if (expiresAt && Date.now() > expiresAt) {
+      const { performLogout } = await import('../src/services/authService');
+      await performLogout();
       setAccount(null);
+      setAvailableAccounts([]);
       return;
     }
     
@@ -457,26 +533,30 @@ export const useDeriv = () => {
         setAvailableAccounts(accountsList);
         
         let activeAccountId = localStorage.getItem('deriv_active_account');
-        let activeAccount = accountsList.find((a: any) => a.loginid === activeAccountId);
+        let activeAccount = accountsList.find((a) => a.loginid === activeAccountId);
         
         if (!activeAccount && accountsList.length > 0) {
           activeAccount = accountsList[0];
-          activeAccountId = activeAccount.loginid;
+          activeAccountId = String(activeAccount.loginid);
           localStorage.setItem('deriv_active_account', activeAccountId!);
         }
 
         if (activeAccount) {
           setAccount({
-            loginid: activeAccount.loginid,
-            balance: activeAccount.balance,
-            currency: activeAccount.currency,
-            email: activeAccount.email,
-            is_virtual: activeAccount.is_virtual,
+            loginid: String(activeAccount.loginid),
+            balance: Number(activeAccount.balance),
+            currency: String(activeAccount.currency),
+            email: String(activeAccount.email),
+            is_virtual: Boolean(activeAccount.is_virtual),
           });
           connectAuth(accessToken, activeAccountId!);
         }
-      } catch (err) {
-        console.error('Failed to init auth via REST:', err);
+      } catch (err: unknown) {
+        const { performLogout } = await import('../src/services/authService');
+        await performLogout();
+        setAccount(null);
+        setAvailableAccounts([]);
+        setError('Session expired or invalid. Please login again.');
       }
     }
   }, [connectAuth]);
@@ -517,15 +597,26 @@ export const useDeriv = () => {
     };
   }, [connectPublic, initAuth]);
 
-  const send = useCallback((payload: any) => {
-    console.log('[DEBUG] Sending payload:', payload);
+  const send = useCallback((payload: Record<string, unknown>) => {
+    if (import.meta.env.DEV) {
+      console.log('[DEBUG] Sending payload:', payload);
+    }
     
     // Route to appropriate WebSocket
     // General market data (ticks, active_symbols) always goes to publicWs
     // Authenticated data (buy, sell, balance, history) AND personalized proposals go to authWs if available
-    const requestType = payload.msg_type || Object.keys(payload)[0];
+    const requestType = String(payload.msg_type || Object.keys(payload)[0]);
     const isAlwaysPublic = ['ticks', 'active_symbols'].includes(requestType);
     const isForget = ['forget', 'forget_all'].includes(requestType);
+
+    const authRequiredTypes = ['buy', 'portfolio', 'balance', 'sell', 'proposal'];
+    if (authRequiredTypes.includes(requestType)) {
+      const isAuthorized = authWs.current?.readyState === WebSocket.OPEN;
+      if (!isAuthorized && getInMemoryToken().accessToken) {
+        // Only throw if the user is supposed to be logged in but WS isn't ready
+        throw new Error('WebSocket not authorized');
+      }
+    }
 
     let targetWs: WebSocket | null;
     if (isAlwaysPublic) {
@@ -547,7 +638,7 @@ export const useDeriv = () => {
         setIsTrading(true);
         // Clear this specific proposal from state immediately to prevent re-use
         // until a new one arrives from the WebSocket.
-        const type = payload.passthrough?.type;
+        const type = (payload.passthrough as Record<string, unknown>)?.type as string;
         if (type) {
           setProposals(prev => {
             const next = { ...prev };
@@ -581,72 +672,31 @@ export const useDeriv = () => {
 
   const login = useCallback(async () => {
     try {
-      const verifier = generateCodeVerifier();
-      const challenge = await generateCodeChallenge(verifier);
-      const state = generateState();
-      
-      sessionStorage.setItem('pkce_code_verifier', verifier);
-      sessionStorage.setItem('oauth_state', state);
-      sessionStorage.setItem('auth_return_to', window.location.pathname + window.location.search);
-      
-      const redirectUri = getRedirectUri();
-      const authUrl = generateAuthUrl({
-        codeChallenge: challenge,
-        state: state,
-        redirectUri,
-        action: 'login'
-      });
-
-      console.log(`[DERIV AUTH] Initiating Login. Redirect URI: ${redirectUri}`);
-      console.log(`[DERIV AUTH] Auth URL: ${authUrl}`);
-      
-      // Navigate to Deriv OAuth
-      window.location.href = authUrl;
+      const { initiateOAuthFlow } = await import('../src/services/authService');
+      await initiateOAuthFlow('login');
     } catch (err: any) {
-      console.error('[DERIV AUTH] Login initialization error:', err);
       setError('Could not initialize login. Please check your browser security settings.');
     }
   }, []);
 
   const signup = useCallback(async () => {
     try {
-      const verifier = generateCodeVerifier();
-      const challenge = await generateCodeChallenge(verifier);
-      const state = generateState();
-      
-      sessionStorage.setItem('pkce_code_verifier', verifier);
-      sessionStorage.setItem('oauth_state', state);
-      sessionStorage.setItem('auth_return_to', window.location.pathname + window.location.search);
-      
-      const redirectUri = getRedirectUri();
-      const authUrl = generateAuthUrl({
-        codeChallenge: challenge,
-        state: state,
-        redirectUri,
-        action: 'signup'
-      });
-
-      console.log(`[DERIV AUTH] Initiating Signup. Redirect URI: ${redirectUri}`);
-      console.log(`[DERIV AUTH] Signup URL: ${authUrl}`);
-      
-      // Navigate to Deriv OAuth
-      window.location.href = authUrl;
+      const { initiateOAuthFlow } = await import('../src/services/authService');
+      await initiateOAuthFlow('signup');
     } catch (err: any) {
-      console.error('[DERIV AUTH] Signup initialization error:', err);
       setError('Could not initialize signup. Please check your browser security settings.');
     }
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('deriv_access_token');
+    clearInMemoryToken();
     localStorage.removeItem('deriv_active_account');
-    localStorage.removeItem('deriv_token_expires_at');
     setAccount(null);
     window.location.reload();
   }, []);
 
   const switchAccount = useCallback(async (loginid: string) => {
-    const token = localStorage.getItem('deriv_access_token');
+    const token = getInMemoryToken().accessToken;
     if (token) {
         localStorage.setItem('deriv_active_account', loginid);
         if (authWs.current) authWs.current.close();
@@ -689,7 +739,9 @@ export const useDeriv = () => {
     if (!force && isSameParams && isSameWs) {
       // If we already have an active subscription on the correct WS, just keep it
       if (proposalIds.current[type]) {
-        console.log(`[DERIV] Already have active subscription for ${type}, skipping.`);
+        if (import.meta.env.DEV) {
+          console.log(`[DERIV] Already have active subscription for ${type}, skipping.`);
+        }
         return;
       }
     }
@@ -697,7 +749,9 @@ export const useDeriv = () => {
     // If we're here, it means we need a new/different subscription.
     // Guard: Prevent double-subscribing while a request is already in flight for this type
     if (pendingProposals.current.has(type)) {
-      console.log(`[DERIV] Subscription for ${type} already pending, skipping.`);
+      if (import.meta.env.DEV) {
+        console.log(`[DERIV] Subscription for ${type} already pending, skipping.`);
+      }
       return;
     }
 
@@ -706,7 +760,9 @@ export const useDeriv = () => {
       const oldId = proposalIds.current[type];
       const oldWs = proposalWs.current[type];
       
-      console.log(`[DERIV] Forgetting old subscription ${oldId} for ${type}`);
+      if (import.meta.env.DEV) {
+        console.log(`[DERIV] Forgetting old subscription ${oldId} for ${type}`);
+      }
       // Send forget specifically to the WS that owned the subscription
       if (oldWs && oldWs.readyState === WebSocket.OPEN) {
         oldWs.send(JSON.stringify({ forget: oldId }));
@@ -746,7 +802,9 @@ export const useDeriv = () => {
       delete payload.underlying_symbol;
     }
     
-    console.log(`[DERIV] Subscribing to live payout for ${payload.contract_type} on ${payload.underlying_symbol || payload.symbol} via ${targetWs?.url || 'unknown'}`);
+    if (import.meta.env.DEV) {
+      console.log(`[DERIV] Subscribing to live payout for ${payload.contract_type} on ${payload.underlying_symbol || payload.symbol} via ${targetWs?.url || 'unknown'}`);
+    }
     
     if (force) {
       // If forced, send immediately
@@ -786,11 +844,13 @@ export const useDeriv = () => {
       setError('Cannot topup real account via this method');
       return;
     }
-    const token = localStorage.getItem('deriv_access_token');
+    const token = getInMemoryToken().accessToken;
     if (!token) return;
 
     try {
-      console.log('[DEBUG] Requesting virtual topup via REST');
+      if (import.meta.env.DEV) {
+        console.log('[DEBUG] Requesting virtual topup via REST');
+      }
       await resetDemoBalanceRest(account.loginid, token);
       setSuccess('Demo balance reset successfully');
       
@@ -798,8 +858,8 @@ export const useDeriv = () => {
       if (authWs.current?.readyState === WebSocket.OPEN) {
         authWs.current.send(JSON.stringify({ balance: 1, account: 'all' }));
       }
-    } catch (e: any) {
-      setError(e.message || 'Failed to reset demo balance');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to reset demo balance');
     }
   }, [account]);
 

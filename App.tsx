@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { AppView, Timeframe, TradeType, WithdrawalRequest } from './types';
 import { getCurrencyConfig } from './constants';
 import { auth } from './firebase';
 import Navigation from './components/Navigation';
-import TradingChart from './components/TradingChart';
 import MarketSelector from './components/MarketSelector';
 import TradeForm from './components/TradeForm';
 import TradingToolbar from './components/TradingToolbar';
 import { useDeriv } from './hooks/useDeriv';
 import { OAUTH_CLIENT_ID, NEW_APP_ID, exchangeCodeForToken } from './src/services/derivApiService';
+
+const TradingChart = lazy(() => import('./components/TradingChart'));
 import { 
   ChevronDown, 
   User, 
@@ -78,91 +79,52 @@ const App: React.FC = () => {
     const state = urlParams.get('state');
     const errorParam = urlParams.get('error');
 
-    if (errorParam) {
-      console.error('[AUTH] Deriv Error:', errorParam, urlParams.get('error_description'));
-      setCustomAlert(`Authentication failed: ${urlParams.get('error_description') || errorParam}`);
-      // Clean URL
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, '', newUrl);
-      return;
-    }
-
-    if (code && state) {
-      console.log('[AUTH] Callback detected. Code received, verifying security state...');
-      
-      const handleCallback = async () => {
-        // 1. Retrieve stored credentials from sessionStorage
-        const storedState = sessionStorage.getItem('oauth_state');
-        const codeVerifier = sessionStorage.getItem('pkce_code_verifier');
-
-        console.log(`[AUTH] CSRF Verification - Received State: ${state}, Stored State: ${storedState}`);
-
-        // 2. Strict State Comparison
-        if (!storedState || state !== storedState) {
-          console.error('[AUTH] State Mismatch Detected!', { 
-            received: state, 
-            expected: storedState 
-          });
-          
-          setCustomAlert('Authentication Error: Security verification failed (State Mismatch). The login process was aborted for your protection. Please try again.');
-          
-          // Clean up the URL to prevent retry loops
-          window.history.replaceState({}, '', window.location.pathname);
-          return;
-        }
-
-        console.log('[AUTH] Security state verified. Proceeding with token exchange.');
-
-        if (!codeVerifier) {
-          console.error('[AUTH] Missing PKCE code_verifier in sessionStorage');
-          setCustomAlert('Authentication Error: Session expired or data missing. Please try logging in again.');
-          return;
-        }
-
+    if (errorParam || (code && state)) {
+      const processCallback = async () => {
         try {
-          // 3. Exchange code for token via backend
-          const tokenData = await exchangeCodeForToken(code, codeVerifier);
+          const { parseOAuthCallback } = await import('./src/services/derivApiService');
+          const { handleOAuthCallback } = await import('./src/services/authService');
           
-          // 4. Store secure token
-          localStorage.setItem('deriv_access_token', tokenData.access_token);
-          const expiresAt = Date.now() + (tokenData.expires_in - 60) * 1000;
-          localStorage.setItem('deriv_token_expires_at', expiresAt.toString());
+          const { code: validatedCode, state: validatedState } = parseOAuthCallback();
+          const { token, expiresAt, returnTo } = await handleOAuthCallback(validatedCode, validatedState);
           
-          // 5. Clean up session
-          sessionStorage.removeItem('oauth_state');
-          sessionStorage.removeItem('pkce_code_verifier');
+          window.dispatchEvent(new CustomEvent('OAUTH_SUCCESS_REDIRECT', {
+              detail: { token, expiresAt }
+          }));
+          window.history.replaceState({}, '', returnTo);
+        } catch (err: unknown) {
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error during authentication';
+          setCustomAlert(errorMessage);
           
-          const returnTo = sessionStorage.getItem('auth_return_to') || window.location.pathname;
-          sessionStorage.removeItem('auth_return_to');
+          const currentUrl = new URL(window.location.href);
+          const returnParams = new URLSearchParams(currentUrl.search);
+          returnParams.delete('code');
+          returnParams.delete('state');
+          returnParams.delete('error');
+          returnParams.delete('error_description');
           
-          console.log('[AUTH] Authentication successful. Redirecting to:', returnTo);
-          
-          if (window.opener && window.opener !== window) {
-            window.opener.postMessage({ type: 'OAUTH_SUCCESS' }, '*');
-            window.close();
-          } else {
-            window.location.assign(returnTo === '/callback/' || returnTo === '/callback' ? '/' : returnTo);
-          }
-        } catch (err: any) {
-          console.error('[AUTH] Token exchange failed:', err);
-          setCustomAlert(`Authentication failed: ${err.message || 'Unknown error during token exchange'}`);
-          
-          window.history.replaceState({}, '', window.location.pathname);
+          const sanitizedSearch = returnParams.toString() ? `?${returnParams.toString()}` : '';
+          window.history.replaceState({}, '', currentUrl.pathname + sanitizedSearch);
         }
       };
 
-      handleCallback();
+      processCallback();
     }
   }, []);
 
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'OAUTH_SUCCESS') {
-        window.location.reload();
-      }
+    const handleRedirectSuccess = (event: Event) => {
+         const customEvent = event as CustomEvent;
+         import('./src/services/authService').then(mod => {
+           mod.setInMemoryToken(customEvent.detail.token, customEvent.detail.expiresAt);
+           window.dispatchEvent(new Event('AUTH_STATE_CHANGED'));
+         });
     };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    window.addEventListener('OAUTH_SUCCESS_REDIRECT', handleRedirectSuccess);
+
+    return () => {
+      window.removeEventListener('OAUTH_SUCCESS_REDIRECT', handleRedirectSuccess);
+    };
   }, []);
 
   useEffect(() => {
@@ -273,11 +235,11 @@ const App: React.FC = () => {
   }, [accountStatus]);
 
   const filteredOpenPositions = useMemo(() => {
-    return Object.values(openPositions || {}).filter((p: any) => p.underlying === selectedSymbol);
+    return Object.values(openPositions || {}).filter((p: Record<string, unknown>) => p.underlying === selectedSymbol);
   }, [openPositions, selectedSymbol]);
 
   const openPositionsList = useMemo(() => {
-    return Object.values(openPositions || {}).filter((p: any) => p && p.contract_id && !p.is_sold);
+    return Object.values(openPositions || {}).filter((p: Record<string, unknown>) => p && p.contract_id && !p.is_sold);
   }, [openPositions]);
 
   const getMarketName = useCallback((symbol: string, shortcode?: string) => {
@@ -313,7 +275,7 @@ const App: React.FC = () => {
   const handleTradeExecuted = useCallback((trade: any) => {
     if (account && trade.contract_id) {
       if (trade.isManual) {
-        manualTradeIds.current.add(trade.contract_id);
+        manualTradeIds.current.add(Number(trade.contract_id));
       }
       
       if (account.is_virtual) {
@@ -329,11 +291,13 @@ const App: React.FC = () => {
     }
   }, [account]);
 
-  const handleTradeClosed = useCallback(async (contract: any) => {
+  const handleTradeClosed = useCallback(async (contract: Record<string, unknown>) => {
     if (account && !account.is_virtual && contract.contract_id && contract.profit) {
       // Only track commission if trade was initiated manually via button
-      if (!manualTradeIds.current.has(contract.contract_id)) {
-        console.log(`[REFER] Skipping non-manual trade: ${contract.contract_id}`);
+      if (!manualTradeIds.current.has(Number(contract.contract_id))) {
+        if (import.meta.env.DEV) {
+          console.log(`[REFER] Skipping non-manual trade: ${contract.contract_id}`);
+        }
         return;
       }
 
@@ -348,7 +312,7 @@ const App: React.FC = () => {
           body: JSON.stringify({
             userId: account.loginid,
             contractId: contract.contract_id,
-            profit: parseFloat(contract.profit),
+            profit: parseFloat(String(contract.profit)),
             appId: NEW_APP_ID.toString(),
             referrerId: localStorage.getItem('desi_ref') || localStorage.getItem('referral_code')
           })
@@ -356,7 +320,7 @@ const App: React.FC = () => {
         const data = await res.json();
         if (data.success) {
           // Remove from manual set after successful processing
-          manualTradeIds.current.delete(contract.contract_id);
+          manualTradeIds.current.delete(Number(contract.contract_id));
           
           // Fetch updated balance from server after successful trade recording
           const balRes = await fetch(`/api/referral-balance/${account.loginid}`);
@@ -425,7 +389,9 @@ const App: React.FC = () => {
   useEffect(() => {
     const fetchWithdrawals = async (retries = 3, delay = 2000) => {
       try {
-        console.log("[CASHIER] Fetching withdrawals...");
+        if (import.meta.env.DEV) {
+          console.log("[CASHIER] Fetching withdrawals...");
+        }
         const apiUrl = `${window.location.origin}/api/w-requests?t=${Date.now()}`;
         const res = await fetch(apiUrl, {
           headers: {
@@ -450,16 +416,21 @@ const App: React.FC = () => {
         if (Array.isArray(data)) {
           setWithdrawalRequests(data);
         } else {
-          console.error("[CASHIER] Withdrawals API did not return an array:", data);
+          if (import.meta.env.DEV) {
+            console.error("[CASHIER] Withdrawals API did not return an array:", data);
+          }
           setWithdrawalRequests([]);
         }
-      } catch (err: any) {
-        const isNetworkError = err.message === 'Failed to fetch' || err.message.includes('NetworkError');
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        const isNetworkError = errorMsg === 'Failed to fetch' || errorMsg.includes('NetworkError');
         if (retries > 0 && isNetworkError) {
           console.warn(`[CASHIER] Network error fetching withdrawals, retrying in ${delay}ms... (${retries} attempts left)`);
           setTimeout(() => fetchWithdrawals(retries - 1, delay * 2), delay);
         } else {
-          console.error("[CASHIER] Failed to fetch withdrawals:", err.name === 'Error' ? err.message : err);
+          if (import.meta.env.DEV) {
+            console.error("[CASHIER] Failed to fetch withdrawals:", errorMsg);
+          }
           // Only show custom alert if it's not a background refresh
           if (retries > 1) {
              setCustomAlert(`Could not load withdrawal history. Please check your connection.`);
@@ -613,12 +584,14 @@ const App: React.FC = () => {
   const [showAssistant, setShowAssistant] = useState(false);
 
   useEffect(() => {
-    let interval: any;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (currentView === AppView.HISTORY) {
       getHistory();
       interval = setInterval(getHistory, 10000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [currentView, getHistory]);
 
   const renderContent = () => {
@@ -678,13 +651,15 @@ const App: React.FC = () => {
 
             <div className="w-full h-[40vh] min-h-[300px] relative flex-shrink-0">
               <ErrorBoundary>
-                <TradingChart 
-                  underlying_symbol={selectedSymbol} 
-                  timeframe={timeframe}
-                  onTimeframeChange={setTimeframe}
-                  barrier={activeBarrier ?? (['HIGHER', 'LOWER', 'TOUCH', 'NOTOUCH', 'ONETOUCH'].includes(tradeType) ? userBarrier : undefined)}
-                  openPositions={filteredOpenPositions}
-                />
+                <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-muted-foreground bg-surface rounded-lg">Loading Chart Engine...</div>}>
+                  <TradingChart 
+                    underlying_symbol={selectedSymbol} 
+                    timeframe={timeframe}
+                    onTimeframeChange={setTimeframe}
+                    barrier={activeBarrier ?? (['HIGHER', 'LOWER', 'TOUCH', 'NOTOUCH', 'ONETOUCH'].includes(tradeType) ? userBarrier : undefined)}
+                    openPositions={filteredOpenPositions}
+                  />
+                </Suspense>
               </ErrorBoundary>
             </div>
 

@@ -27,4 +27,4 @@ const TradingToolbar: React.FC<TradingToolbarProps> = ({ timeframe, onTimeframeC
   );
 };
 
-export default TradingToolbar;
+export default React.memo(TradingToolbar);
