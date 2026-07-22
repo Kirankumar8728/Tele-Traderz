@@ -13,7 +13,12 @@ const UTM_CAMPAIGN = import.meta.env.VITE_DERIV_UTM_CAMPAIGN;
  * Dynamically determines the redirect URI based on current environment.
  */
 export const getRedirectUri = () => {
-  const uri = import.meta.env.VITE_REDIRECT_URI || `${window.location.origin}/callback`;
+  if (typeof window !== 'undefined') {
+    if (window.location.origin.includes('onrender.com') || window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')) {
+      return `${window.location.origin}/callback`;
+    }
+  }
+  const uri = import.meta.env.VITE_REDIRECT_URI || (typeof window !== 'undefined' ? `${window.location.origin}/callback` : 'https://bynex-trader-i2we.onrender.com/callback');
   if (!uri.startsWith('https://') && !uri.startsWith('http://localhost') && !uri.startsWith('http://127.0.0.1')) {
     console.warn('Invalid redirect URI check: Typically must start with https:// or be localhost for development');
   }
