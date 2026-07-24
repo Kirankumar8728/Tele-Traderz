@@ -2,7 +2,7 @@
 // Note: In Vite, variables must be prefixed with VITE_ to be available on the client side.
 export const OAUTH_CLIENT_ID = import.meta.env.VITE_DERIV_CLIENT_ID || '32FjINZV8sXfdKQcVvnZf';
 export const NEW_APP_ID = import.meta.env.VITE_DERIV_APP_ID || '32FjINZV8sXfdKQcVvnZf';
-const AFFILIATE_ID = import.meta.env.VITE_DERIV_AFFILIATE_ID;
+const AFFILIATE_ID = import.meta.env.VITE_DERIV_AFFILIATE_ID || import.meta.env.VITE_AFFILIATE_TOKEN;
 export const OAUTH_SCOPE =
   import.meta.env.VITE_DERIV_SCOPE ||
   'trade account_manage';
