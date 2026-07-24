@@ -1893,7 +1893,10 @@ const App: React.FC = () => {
                   </div>
                   <div className="text-left">
                     <p className="text-[10px] font-black text-gray-500 uppercase">Logged in as</p>
-                    <p className="text-sm font-black text-white">{account.email || 'Trader'}</p>
+                    <p className="text-sm font-black text-white">{account.loginid || 'Trader'}</p>
+                    {account.email && (
+                      <p className="text-xs text-gray-400 lowercase mt-0.5">{account.email}</p>
+                    )}
                   </div>
                 </div>
               )}
