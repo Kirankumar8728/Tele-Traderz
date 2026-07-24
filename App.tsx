@@ -1874,7 +1874,12 @@ const App: React.FC = () => {
             <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto sm:hidden mb-6 flex-shrink-0" />
             
             <div className="flex items-center justify-between mb-6 flex-shrink-0">
-              <h3 className="text-xl font-black italic uppercase">Account Settings</h3>
+              <div>
+                <h3 className="text-xl font-black italic uppercase">Account Settings</h3>
+                {account?.email && (
+                  <p className="text-xs text-gray-400 mt-1 lowercase">{account.email}</p>
+                )}
+              </div>
               <button onClick={() => setShowAccountMenu(false)} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -1882,10 +1887,42 @@ const App: React.FC = () => {
 
             <div className="space-y-4 overflow-y-auto flex-1 pr-2 pb-4">
               {account && (
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-red-600/10 flex items-center justify-center text-red-500 font-black">
+                    {account.email ? account.email.charAt(0).toUpperCase() : <User className="w-5 h-5" />}
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black text-gray-500 uppercase">Logged in as</p>
+                    <p className="text-sm font-black text-white">{account.email || 'Trader'}</p>
+                  </div>
+                </div>
+              )}
+
+              {account && (
                 <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-3">
                   <p className="text-[10px] font-black text-gray-500 uppercase">Accounts</p>
                   {(() => {
-                    const accounts = JSON.parse(localStorage.getItem('deriv_accounts') || '[]');
+                    let accounts = JSON.parse(localStorage.getItem('deriv_accounts') || '[]');
+                    if (!accounts || accounts.length === 0) {
+                      accounts = availableAccounts.map(a => ({
+                        id: a.loginid,
+                        currency: a.currency,
+                        is_virtual: a.is_virtual
+                      }));
+                    }
+                    // Deduplicate/merge to ensure all available accounts are shown
+                    const accountIds = new Set(accounts.map((a: any) => a.id));
+                    availableAccounts.forEach(a => {
+                      if (!accountIds.has(a.loginid)) {
+                        accounts.push({
+                          id: a.loginid,
+                          currency: a.currency,
+                          is_virtual: a.is_virtual
+                        });
+                        accountIds.add(a.loginid);
+                      }
+                    });
+
                     const sortedAccounts = [...accounts].sort((a, b) => {
                       const aIsReal = !a.id.startsWith('VR');
                       const bIsReal = !b.id.startsWith('VR');
