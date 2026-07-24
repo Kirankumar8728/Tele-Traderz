@@ -261,6 +261,7 @@ export const useDeriv = () => {
         socket.send(JSON.stringify({ profit_table: 1, limit: 50, description: 1 }));
         socket.send(JSON.stringify({ statement: 1, limit: 50, description: 1 }));
         socket.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
+        socket.send(JSON.stringify({ get_settings: 1 }));
 
         // Restore active proposals hosted on this specific WebSocket
         Object.entries(lastProposalParams.current).forEach(([type, params]) => {
@@ -297,6 +298,14 @@ export const useDeriv = () => {
         }
 
         switch (data.msg_type) {
+          case 'get_settings':
+            if (data.get_settings?.email) {
+              const email = String(data.get_settings.email);
+              localStorage.setItem('deriv_user_email', email);
+              setAccount(prev => prev ? { ...prev, email } : null);
+              setAvailableAccounts(prev => prev.map(acc => ({ ...acc, email })));
+            }
+            break;
           case 'balance':
             if (data.balance.accounts) {
               const accountsMap = data.balance.accounts;
@@ -542,11 +551,12 @@ export const useDeriv = () => {
         }
 
         if (activeAccount) {
+          const storedEmail = localStorage.getItem('deriv_user_email') || '';
           setAccount({
             loginid: String(activeAccount.loginid),
             balance: Number(activeAccount.balance),
             currency: String(activeAccount.currency),
-            email: String(activeAccount.email),
+            email: storedEmail || String(activeAccount.email),
             is_virtual: Boolean(activeAccount.is_virtual),
           });
           connectAuth(accessToken, activeAccountId!);
