@@ -122,8 +122,40 @@ const App: React.FC = () => {
     };
     window.addEventListener('OAUTH_SUCCESS_REDIRECT', handleRedirectSuccess);
 
+    const handlePopupMessage = async (event: MessageEvent) => {
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost') && !origin.includes('127.0.0.1') && !origin.includes('onrender.com')) {
+        return;
+      }
+
+      if (event.data?.type === 'DERIV_OAUTH_SUCCESS') {
+        const { code, state, error, error_description } = event.data;
+        if (error) {
+          setCustomAlert(error_description || `OAuth Error: ${error}`);
+          return;
+        }
+
+        if (code && state) {
+          try {
+            const { handleOAuthCallback } = await import('./src/services/authService');
+            const { token, expiresAt } = await handleOAuthCallback(code, state);
+            
+            import('./src/services/authService').then(mod => {
+              mod.setInMemoryToken(token, expiresAt);
+              window.dispatchEvent(new Event('AUTH_STATE_CHANGED'));
+            });
+          } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error during authentication';
+            setCustomAlert(errorMessage);
+          }
+        }
+      }
+    };
+    window.addEventListener('message', handlePopupMessage);
+
     return () => {
       window.removeEventListener('OAUTH_SUCCESS_REDIRECT', handleRedirectSuccess);
+      window.removeEventListener('message', handlePopupMessage);
     };
   }, []);
 
@@ -181,7 +213,6 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved as 'light' | 'dark';
-    if ((window.Telegram as any)?.WebApp?.colorScheme) return (window.Telegram as any).WebApp.colorScheme;
     return 'dark';
   });
 
@@ -370,21 +401,7 @@ const App: React.FC = () => {
     }
   }, [account?.loginid]);
 
-  // Capture Telegram ID immediately on app load
-  useEffect(() => {
-    if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
-      const user = window.Telegram.WebApp.initDataUnsafe.user;
-      fetch('/api/user-telegram', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          telegramId: user.id,
-          telegramUsername: user.username,
-          userId: account?.loginid || null // Send loginid if they have one, otherwise null
-        })
-      }).catch(err => console.error("Failed to link Telegram ID:", err));
-    }
-  }, [account?.loginid]);
+
 
   useEffect(() => {
     const fetchWithdrawals = async (retries = 3, delay = 2000) => {
@@ -503,19 +520,9 @@ const App: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get('ref');
-    
-    // Check for Telegram start_param (referral ID)
-    const tgStartParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
 
-    if (tgStartParam) {
-      localStorage.setItem('desi_ref', tgStartParam);
-    } else if (ref) {
+    if (ref) {
       localStorage.setItem('desi_ref', ref);
-    }
-    
-    if (window.Telegram?.WebApp) {
-      window.Telegram.WebApp.ready();
-      window.Telegram.WebApp.expand();
     }
 
     // Refresh contract IDs on mount
@@ -1118,13 +1125,7 @@ const App: React.FC = () => {
                   setIsWithdrawing(true);
                   // Simulate API call
                   await new Promise(resolve => setTimeout(resolve, 2000));
-                  if (window.Telegram?.WebApp) {
-                    if (window.Telegram.WebApp.isVersionAtLeast('6.2')) {
-                      window.Telegram.WebApp.showAlert('Withdrawal request submitted successfully! Our team will process it within 24 hours.');
-                    } else {
-                      setCustomAlert('Withdrawal request submitted successfully! Our team will process it within 24 hours.');
-                    }
-                  }
+                  setCustomAlert('Withdrawal request submitted successfully! Our team will process it within 24 hours.');
                   setReferralBalance(prev => prev - parseFloat(withdrawForm.amount));
                   
                   // Save Request
@@ -1421,7 +1422,7 @@ const App: React.FC = () => {
             <div className="space-y-3">
               <h3 className="text-sm font-black uppercase italic px-2">How it works</h3>
               {[
-                { step: '01', title: 'Invite Friends', desc: 'Share your unique link via Telegram or Social Media.' },
+                { step: '01', title: 'Invite Friends', desc: 'Share your unique link via Social Media.' },
                 { step: '02', title: 'They Trade', desc: 'Your referrals sign up and start trading on Bynex Trader.' },
                 { step: '03', title: 'Earn Rewards', desc: 'Get 1% commission on every trade they make.' },
               ].map(s => (
@@ -1714,14 +1715,14 @@ const App: React.FC = () => {
 
             <div className="space-y-4">
               <div className="p-6 bg-white/5 border border-white/10 rounded-[2rem] text-center">
-                <h3 className="text-sm font-black uppercase mb-2">Telegram Support</h3>
-                <p className="text-xs text-gray-400 mb-6">Get instant help from our support team via Telegram.</p>
+                <h3 className="text-sm font-black uppercase mb-2">Customer Support Desk</h3>
+                <p className="text-xs text-gray-400 mb-6">Get professional assistance from our 24/7 support team.</p>
                 <button 
-                  onClick={() => window.open('https://t.me/bynextradersupportbot', '_blank')}
+                  onClick={() => setCustomAlert('Support email copied: support@bynextrader.com')}
                   className="w-full py-4 bg-red-600 rounded-2xl font-black text-sm uppercase shadow-lg shadow-red-600/20 hover:bg-red-500 transition-colors flex items-center justify-center gap-2"
                 >
-                  <Smartphone className="w-5 h-5" />
-                  Open Telegram Bot
+                  <Globe className="w-5 h-5" />
+                  support@bynextrader.com
                 </button>
               </div>
 
@@ -1730,8 +1731,8 @@ const App: React.FC = () => {
                   <Globe className="w-5 h-5 text-gray-400" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black text-gray-500 uppercase">Telegram Support</p>
-                  <p className="text-sm font-black text-white">@bynextradersupportbot</p>
+                  <p className="text-[10px] font-black text-gray-500 uppercase">Response Time</p>
+                  <p className="text-sm font-black text-white">Within 24 Hours</p>
                 </div>
               </div>
             </div>
