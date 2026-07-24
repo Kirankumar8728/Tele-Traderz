@@ -565,7 +565,18 @@ export const useDeriv = () => {
     connectPublic();
     initAuth();
     
+    const handleAuthStateChanged = () => {
+      if (import.meta.env.DEV) {
+        console.log('[DERIV] Auth state changed event received, re-initializing auth...');
+      }
+      initAuth();
+    };
+
+    window.addEventListener('AUTH_STATE_CHANGED', handleAuthStateChanged);
+    
     return () => {
+      window.removeEventListener('AUTH_STATE_CHANGED', handleAuthStateChanged);
+      
       if (pingIntervalPublic.current) clearInterval(pingIntervalPublic.current);
       if (pingIntervalAuth.current) clearInterval(pingIntervalAuth.current);
       if (publicReconnectTimeout.current) clearTimeout(publicReconnectTimeout.current);
