@@ -41,6 +41,142 @@ const generateCodeChallenge = async (verifier: string) => {
   const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
   return base64UrlEncode(hashBuffer);
 };
+// -- Resilient Storage Configuration & Helpers --
+interface StoredItem {
+  value: string;
+  createdAt: number;
+}
+
+const EXPIRATION_MS = 15 * 60 * 1000; // 15 minutes
+const isDev = process.env.NODE_ENV !== 'production';
+
+const logDev = (message: string, ...args: any[]) => {
+  if (isDev) {
+    console.log(`[OAuth Dev] ${message}`, ...args);
+  }
+};
+
+const getValidStoredItem = (key: string, storage: Storage, storageName: 'sessionStorage' | 'localStorage'): StoredItem | null => {
+  const itemStr = storage.getItem(key);
+  if (!itemStr) return null;
+
+  try {
+    const item = JSON.parse(itemStr);
+    
+    // 5. Defensive Validation
+    if (
+      item &&
+      typeof item === 'object' &&
+      typeof item.value === 'string' &&
+      item.value.trim() !== '' &&
+      typeof item.createdAt === 'number' &&
+      !isNaN(item.createdAt) &&
+      item.createdAt > 0
+    ) {
+      return item;
+    } else {
+      logDev(`corrupted storage removed: ${key} in ${storageName}`);
+      storage.removeItem(key);
+    }
+  } catch (e) {
+    logDev(`corrupted storage removed: ${key} in ${storageName}`);
+    storage.removeItem(key);
+  }
+  return null;
+};
+
+export const saveOAuthState = (verifier: string, state: string) => {
+  const now = Date.now();
+  const stateItem: StoredItem = { value: state, createdAt: now };
+  const verifierItem: StoredItem = { value: verifier, createdAt: now };
+
+  const stateStr = JSON.stringify(stateItem);
+  const verifierStr = JSON.stringify(verifierItem);
+
+  sessionStorage.setItem('oauth_state', stateStr);
+  sessionStorage.setItem('pkce_code_verifier', verifierStr);
+
+  localStorage.setItem('oauth_state', stateStr);
+  localStorage.setItem('pkce_code_verifier', verifierStr);
+
+  logDev('OAuth state generated: ' + (state ? `${state.substring(0, 6)}...` : 'none'));
+};
+
+export const loadOAuthState = (): { verifier: string | null; state: string | null; expired: boolean } => {
+  let stateItem: StoredItem | null = null;
+  let verifierItem: StoredItem | null = null;
+  let source: 'sessionStorage' | 'localStorage' | null = null;
+
+  // 1. Attempt retrieval from sessionStorage
+  stateItem = getValidStoredItem('oauth_state', sessionStorage, 'sessionStorage');
+  verifierItem = getValidStoredItem('pkce_code_verifier', sessionStorage, 'sessionStorage');
+
+  if (stateItem && verifierItem) {
+    source = 'sessionStorage';
+  } else {
+    // Clear potentially incomplete/malformed storage in sessionStorage
+    sessionStorage.removeItem('oauth_state');
+    sessionStorage.removeItem('pkce_code_verifier');
+    stateItem = null;
+    verifierItem = null;
+  }
+
+  // 2. Attempt retrieval from localStorage if sessionStorage is empty/invalid
+  if (!stateItem || !verifierItem) {
+    stateItem = getValidStoredItem('oauth_state', localStorage, 'localStorage');
+    verifierItem = getValidStoredItem('pkce_code_verifier', localStorage, 'localStorage');
+
+    if (stateItem && verifierItem) {
+      source = 'localStorage';
+    } else {
+      // Clear potentially incomplete/malformed storage in localStorage
+      localStorage.removeItem('oauth_state');
+      localStorage.removeItem('pkce_code_verifier');
+      stateItem = null;
+      verifierItem = null;
+    }
+  }
+
+  if (!stateItem || !verifierItem) {
+    return { verifier: null, state: null, expired: false };
+  }
+
+  // 3. Expiration check (15 minutes limit)
+  const now = Date.now();
+  const isStateExpired = (now - stateItem.createdAt) > EXPIRATION_MS;
+  const isVerifierExpired = (now - verifierItem.createdAt) > EXPIRATION_MS;
+
+  if (isStateExpired || isVerifierExpired) {
+    logDev('expired storage removed');
+    clearOAuthState();
+    return { verifier: null, state: null, expired: true };
+  }
+
+  // 4. Storage Synchronization
+  if (source === 'localStorage') {
+    logDev('OAuth state restored: localStorage');
+    sessionStorage.setItem('oauth_state', JSON.stringify(stateItem));
+    sessionStorage.setItem('pkce_code_verifier', JSON.stringify(verifierItem));
+    logDev('storage synchronization completed');
+  } else if (source === 'sessionStorage') {
+    logDev('OAuth state restored: sessionStorage');
+  }
+
+  return {
+    verifier: verifierItem.value,
+    state: stateItem.value,
+    expired: false
+  };
+};
+
+export const clearOAuthState = () => {
+  sessionStorage.removeItem('oauth_state');
+  sessionStorage.removeItem('pkce_code_verifier');
+  localStorage.removeItem('oauth_state');
+  localStorage.removeItem('pkce_code_verifier');
+  sessionStorage.removeItem('auth_return_to');
+  logDev('OAuth cleanup completed');
+};
 
 export const initiateOAuthFlow = async (action: 'login' | 'signup') => {
   try {
@@ -48,9 +184,8 @@ export const initiateOAuthFlow = async (action: 'login' | 'signup') => {
     const challenge = await generateCodeChallenge(verifier);
     const state = generateRandomString(32);
 
-    // Use sessionStorage for security
-    sessionStorage.setItem('pkce_code_verifier', verifier);
-    sessionStorage.setItem('oauth_state', state);
+    // Save state using resilient helper (sessionStorage + localStorage)
+    saveOAuthState(verifier, state);
 
     // Sanitize returnTo
     const currentUrl = new URL(window.location.href);
@@ -77,8 +212,7 @@ export const initiateOAuthFlow = async (action: 'login' | 'signup') => {
       action: action
     });
 
-    // We use full-page redirect universally for all devices.
-    // It is the most robust strategy and avoids popup blockers and origin communication overhead.
+    // Full-page redirect
     window.location.href = authUrl;
     
     return true;
@@ -88,42 +222,65 @@ export const initiateOAuthFlow = async (action: 'login' | 'signup') => {
   }
 };
 
-export const handleOAuthCallback = async (code: string, state: string, errorParam?: string | null): Promise<{ token: string, expiresAt: number, returnTo: string }> => {
+export const handleOAuthCallback = async (
+  code: string | null,
+  state: string | null,
+  errorParam?: string | null
+): Promise<{ token: string; expiresAt: number; returnTo: string }> => {
+  logDev('Callback URL: ' + window.location.origin + window.location.pathname);
+  logDev('Received code: ' + (code ? `${code.substring(0, 6)}...` : 'none'));
+  logDev('Received state: ' + (state ? `${state.substring(0, 6)}...` : 'none'));
+
   if (errorParam) {
-    sessionStorage.removeItem('oauth_state');
-    sessionStorage.removeItem('pkce_code_verifier');
-    sessionStorage.removeItem('auth_return_to');
-    throw new Error(`Authentication denied: ${errorParam}`);
+    clearOAuthState();
+    throw new Error('Authentication cancelled.');
   }
 
-  // 1. Retrieve stored credentials from sessionStorage
-  const storedState = sessionStorage.getItem('oauth_state');
-  const codeVerifier = sessionStorage.getItem('pkce_code_verifier');
-
-  // 2. Strict State Comparison
-  if (!storedState || state !== storedState) {
-    sessionStorage.removeItem('oauth_state');
-    sessionStorage.removeItem('pkce_code_verifier');
-    sessionStorage.removeItem('auth_return_to');
-    throw new Error('Security verification failed (State Mismatch). The login process was aborted for your protection.');
+  // 1. Validate authorization code exists
+  if (!code) {
+    clearOAuthState();
+    throw new Error('Missing authorization code.');
   }
 
-  if (!codeVerifier) {
-    sessionStorage.removeItem('oauth_state');
-    sessionStorage.removeItem('auth_return_to');
-    throw new Error('Session expired or data missing. Please try logging in again.');
+  // 2. Validate returned state exists
+  if (!state) {
+    clearOAuthState();
+    throw new Error('Missing OAuth state.');
   }
+
+  // 3. Load stored state and verifier
+  const { verifier: codeVerifier, state: storedState, expired } = loadOAuthState();
+
+  if (expired) {
+    // loadOAuthState already calls clearOAuthState() if expired
+    throw new Error('Your login session has expired. Please try again.');
+  }
+
+  // 4. Validate stored state exists
+  if (!storedState || !codeVerifier) {
+    clearOAuthState();
+    throw new Error('Authentication session expired.');
+  }
+
+  // 5. Validate returned state == stored state
+  if (state !== storedState) {
+    logDev('State mismatch', `Received: ${state ? `${state.substring(0, 6)}...` : 'none'}, Stored: ${storedState ? `${storedState.substring(0, 6)}...` : 'none'}`);
+    clearOAuthState();
+    throw new Error('Invalid authentication state.');
+  }
+
+  logDev('OAuth validation passed');
 
   try {
-    // 3. Exchange code for token via backend
+    logDev('Token exchange started');
+    // 6. Exchange code for token via backend
     const tokenData = await exchangeCodeForToken(code, codeVerifier);
-    
-    // 4. Clean up PKCE session data BEFORE anything else
-    sessionStorage.removeItem('oauth_state');
-    sessionStorage.removeItem('pkce_code_verifier');
+    logDev('Token exchange completed');
     
     let returnTo = sessionStorage.getItem('auth_return_to') || '/';
-    sessionStorage.removeItem('auth_return_to');
+    
+    // 7. Clean up PKCE session data ONLY AFTER successful token exchange
+    clearOAuthState();
     
     // Strict sanitization for final redirect destination
     try {
@@ -145,9 +302,9 @@ export const handleOAuthCallback = async (code: string, state: string, errorPara
       returnTo
     };
   } catch (err) {
-    sessionStorage.removeItem('oauth_state');
-    sessionStorage.removeItem('pkce_code_verifier');
-    sessionStorage.removeItem('auth_return_to');
+    // If exchangeCodeForToken() throws an error or returns an unsuccessful response,
+    // preserve the PKCE verifier and state while the current authentication attempt
+    // is still recoverable, so do NOT call clearOAuthState() here.
     throw err;
   }
 };

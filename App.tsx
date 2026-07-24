@@ -85,8 +85,8 @@ const App: React.FC = () => {
           const { parseOAuthCallback } = await import('./src/services/derivApiService');
           const { handleOAuthCallback } = await import('./src/services/authService');
           
-          const { code: validatedCode, state: validatedState } = parseOAuthCallback();
-          const { token, expiresAt, returnTo } = await handleOAuthCallback(validatedCode, validatedState);
+          const { code: rawCode, state: rawState, error, errorDescription } = parseOAuthCallback();
+          const { token, expiresAt, returnTo } = await handleOAuthCallback(rawCode, rawState, error || errorDescription);
           
           window.dispatchEvent(new CustomEvent('OAUTH_SUCCESS_REDIRECT', {
               detail: { token, expiresAt }

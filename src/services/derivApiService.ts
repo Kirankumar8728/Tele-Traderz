@@ -13,16 +13,22 @@ const UTM_CAMPAIGN = import.meta.env.VITE_DERIV_UTM_CAMPAIGN;
  * Dynamically determines the redirect URI based on current environment.
  */
 export const getRedirectUri = () => {
-  if (typeof window !== 'undefined') {
-    if (window.location.origin.includes('onrender.com') || window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')) {
+  const isDev = import.meta.env.DEV;
+  const configuredUri = import.meta.env.VITE_REDIRECT_URI;
+
+  if (configuredUri) {
+    return configuredUri;
+  }
+
+  if (isDev) {
+    if (typeof window !== 'undefined') {
       return `${window.location.origin}/callback`;
     }
+    return 'http://localhost:3000/callback';
   }
-  const uri = import.meta.env.VITE_REDIRECT_URI || (typeof window !== 'undefined' ? `${window.location.origin}/callback` : 'https://bynex-trader-i2we.onrender.com/callback');
-  if (!uri.startsWith('https://') && !uri.startsWith('http://localhost') && !uri.startsWith('http://127.0.0.1')) {
-    console.warn('Invalid redirect URI check: Typically must start with https:// or be localhost for development');
-  }
-  return uri;
+
+  // In production, if VITE_REDIRECT_URI is missing, throw a clear configuration error
+  throw new Error('Configuration Error: VITE_REDIRECT_URI is not configured in the production environment.');
 };
 
 const API_BASE_URL = 'https://api.derivws.com';
@@ -235,36 +241,10 @@ export const parseOAuthCallback = () => {
   const error = params.get('error');
   const errorDescription = params.get('error_description');
 
-  // Handle OAuth errors
-  if (error) {
-    sessionStorage.removeItem('oauth_state');
-    sessionStorage.removeItem('pkce_code_verifier');
-    sessionStorage.removeItem('auth_return_to');
-    throw new Error(errorDescription || `OAuth Error: ${error}`);
-  }
-
-  // Validate authorization code
-  if (!code) {
-    throw new Error('Missing authorization code');
-  }
-
-  // Validate OAuth state
-  if (!state) {
-    throw new Error('Missing OAuth state');
-  }
-
-  // Compare with stored state
-  const storedState = sessionStorage.getItem('oauth_state');
-
-  if (storedState !== state) {
-    sessionStorage.removeItem('oauth_state');
-    sessionStorage.removeItem('pkce_code_verifier');
-    sessionStorage.removeItem('auth_return_to');
-    throw new Error('OAuth state mismatch');
-  }
-
   return {
     code,
     state,
+    error,
+    errorDescription,
   };
 };
