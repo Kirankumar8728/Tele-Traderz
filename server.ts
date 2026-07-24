@@ -227,74 +227,11 @@ async function startServer() {
   });
 
   // ============================================================================
-  // Deriv OAuth Callback HTML Handler (Supports popup and full-page redirect)
+  // Deriv OAuth Callback Redirect Handler
   // ============================================================================
   app.get(["/callback", "/callback/"], (req: express.Request, res: express.Response) => {
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Authenticating...</title>
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              height: 100vh;
-              background-color: #0b0e14;
-              color: #ffffff;
-              margin: 0;
-            }
-            .spinner {
-              border: 4px solid rgba(255, 255, 255, 0.1);
-              width: 36px;
-              height: 36px;
-              border-radius: 50%;
-              border-left-color: #2563eb;
-              animation: spin 1s linear infinite;
-              margin-bottom: 20px;
-            }
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="spinner"></div>
-          <h3>Connecting to Bynex Trader...</h3>
-          <p>Please wait while we complete your authentication.</p>
-          <script>
-            const urlParams = new URLSearchParams(window.location.search);
-            const code = urlParams.get('code');
-            const state = urlParams.get('state');
-            const error = urlParams.get('error');
-            const error_description = urlParams.get('error_description');
-
-            if (window.opener) {
-              // Popup mode: send credentials back to opener window and close popup
-              window.opener.postMessage({
-                type: 'DERIV_OAUTH_SUCCESS',
-                code,
-                state,
-                error,
-                error_description
-              }, '*');
-              
-              // Close popup after a slight delay to ensure message delivery
-              setTimeout(() => {
-                window.close();
-              }, 500);
-            } else {
-              // Full page redirect mode fallback: redirect to the home page with query params
-              window.location.href = '/' + window.location.search;
-            }
-          </script>
-        </body>
-      </html>
-    `);
+    const queryString = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+    res.redirect("/" + queryString);
   });
 
   // ============================================================================

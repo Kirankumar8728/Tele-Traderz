@@ -77,12 +77,9 @@ export const initiateOAuthFlow = async (action: 'login' | 'signup') => {
       action: action
     });
 
-    // Use popup-based flow to prevent iframe SAMEORIGIN/CSP errors in the AI Studio preview environment.
-    // Falls back to full-page redirect if the popup is blocked.
-    const authWindow = window.open(authUrl, 'deriv_oauth', 'width=600,height=700');
-    if (!authWindow) {
-      window.location.href = authUrl;
-    }
+    // We use full-page redirect universally for all devices.
+    // It is the most robust strategy and avoids popup blockers and origin communication overhead.
+    window.location.href = authUrl;
     
     return true;
   } catch (error) {

@@ -122,40 +122,8 @@ const App: React.FC = () => {
     };
     window.addEventListener('OAUTH_SUCCESS_REDIRECT', handleRedirectSuccess);
 
-    const handlePopupMessage = async (event: MessageEvent) => {
-      const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost') && !origin.includes('127.0.0.1') && !origin.includes('onrender.com')) {
-        return;
-      }
-
-      if (event.data?.type === 'DERIV_OAUTH_SUCCESS') {
-        const { code, state, error, error_description } = event.data;
-        if (error) {
-          setCustomAlert(error_description || `OAuth Error: ${error}`);
-          return;
-        }
-
-        if (code && state) {
-          try {
-            const { handleOAuthCallback } = await import('./src/services/authService');
-            const { token, expiresAt } = await handleOAuthCallback(code, state);
-            
-            import('./src/services/authService').then(mod => {
-              mod.setInMemoryToken(token, expiresAt);
-              window.dispatchEvent(new Event('AUTH_STATE_CHANGED'));
-            });
-          } catch (err: unknown) {
-            const errorMessage = err instanceof Error ? err.message : 'Unknown error during authentication';
-            setCustomAlert(errorMessage);
-          }
-        }
-      }
-    };
-    window.addEventListener('message', handlePopupMessage);
-
     return () => {
       window.removeEventListener('OAUTH_SUCCESS_REDIRECT', handleRedirectSuccess);
-      window.removeEventListener('message', handlePopupMessage);
     };
   }, []);
 
