@@ -716,15 +716,6 @@ export const useDeriv = () => {
       const { initiateOAuthFlow } = await import('../src/services/authService');
       await initiateOAuthFlow('login');
     } catch (err: any) {
-      if (import.meta.env.DEV) {
-        console.error('[useDeriv] Could not initialize login:', {
-          message: err?.message || String(err),
-          stack: err?.stack,
-          functionName: 'login',
-          fileName: 'useDeriv.ts',
-          error: err
-        });
-      }
       setError('Could not initialize login. Please check your browser security settings.');
     }
   }, []);
@@ -734,15 +725,6 @@ export const useDeriv = () => {
       const { initiateOAuthFlow } = await import('../src/services/authService');
       await initiateOAuthFlow('signup');
     } catch (err: any) {
-      if (import.meta.env.DEV) {
-        console.error('[useDeriv] Could not initialize signup:', {
-          message: err?.message || String(err),
-          stack: err?.stack,
-          functionName: 'signup',
-          fileName: 'useDeriv.ts',
-          error: err
-        });
-      }
       setError('Could not initialize signup. Please check your browser security settings.');
     }
   }, []);
