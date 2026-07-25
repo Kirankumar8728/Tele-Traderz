@@ -130,24 +130,14 @@ export const useDeriv = () => {
       Object.entries(lastProposalParams.current).forEach(([type, params]) => {
         if (!authWs.current || authWs.current.readyState !== WebSocket.OPEN) {
           pendingProposals.current.add(type);
-          const symbol = params.symbol || params.underlying_symbol;
-          const req_id = params.req_id || (type === 'CALL' || type === 'HIGHER' || type === 'TOUCH' || type === 'ONETOUCH' ? 100 : 200);
-          const payload: any = {
+          socket.send(JSON.stringify({
             proposal: 1,
             subscribe: 1,
-            basis: params.basis || 'stake',
-            currency: account?.currency || 'USD',
+            basis: 'stake',
+            currency: 'USD',
             ...params,
-            req_id
-          };
-          if (socket.url.includes('api.derivws.com')) {
-            payload.underlying_symbol = symbol;
-            delete payload.symbol;
-          } else {
-            payload.symbol = symbol;
-            delete payload.underlying_symbol;
-          }
-          socket.send(JSON.stringify(payload));
+            req_id: type === 'CALL' || type === 'HIGHER' || type === 'TOUCH' || type === 'ONETOUCH' ? 100 : 200
+          }));
         }
       });
     };
@@ -272,29 +262,18 @@ export const useDeriv = () => {
         socket.send(JSON.stringify({ statement: 1, limit: 50, description: 1 }));
         socket.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
         socket.send(JSON.stringify({ get_settings: 1 }));
-        socket.send(JSON.stringify({ get_account_status: 1 }));
 
         // Restore active proposals hosted on this specific WebSocket
         Object.entries(lastProposalParams.current).forEach(([type, params]) => {
           pendingProposals.current.add(type);
-          const symbol = params.symbol || params.underlying_symbol;
-          const req_id = params.req_id || (type === 'CALL' || type === 'HIGHER' || type === 'TOUCH' || type === 'ONETOUCH' ? 100 : 200);
-          const payload: any = {
+          socket.send(JSON.stringify({
             proposal: 1,
             subscribe: 1,
-            basis: params.basis || 'stake',
-            currency: account?.currency || 'USD',
+            basis: 'stake',
+            currency: 'USD',
             ...params,
-            req_id
-          };
-          if (socket.url.includes('api.derivws.com')) {
-            payload.underlying_symbol = symbol;
-            delete payload.symbol;
-          } else {
-            payload.symbol = symbol;
-            delete payload.underlying_symbol;
-          }
-          socket.send(JSON.stringify(payload));
+            req_id: type === 'CALL' || type === 'HIGHER' || type === 'TOUCH' || type === 'ONETOUCH' ? 100 : 200
+          }));
         });
       };
 
@@ -717,15 +696,6 @@ export const useDeriv = () => {
       const { initiateOAuthFlow } = await import('../src/services/authService');
       await initiateOAuthFlow('login');
     } catch (err: any) {
-      if (import.meta.env.DEV) {
-        console.error('[useDeriv] Could not initialize login:', {
-          message: err?.message || String(err),
-          stack: err?.stack,
-          functionName: 'login',
-          fileName: 'useDeriv.ts',
-          error: err
-        });
-      }
       setError('Could not initialize login. Please check your browser security settings.');
     }
   }, []);
@@ -735,15 +705,6 @@ export const useDeriv = () => {
       const { initiateOAuthFlow } = await import('../src/services/authService');
       await initiateOAuthFlow('signup');
     } catch (err: any) {
-      if (import.meta.env.DEV) {
-        console.error('[useDeriv] Could not initialize signup:', {
-          message: err?.message || String(err),
-          stack: err?.stack,
-          functionName: 'signup',
-          fileName: 'useDeriv.ts',
-          error: err
-        });
-      }
       setError('Could not initialize signup. Please check your browser security settings.');
     }
   }, []);
