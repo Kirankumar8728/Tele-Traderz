@@ -11,14 +11,27 @@ export interface DerivAuthState {
   expiresAt: number | null;
 }
 
-// Generate PKCE code verifier and challenge
+// Generate PKCE code verifier and challenge safely
 const generateRandomString = (length: number) => {
   const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
   let randomString = '';
-  const randomValues = new Uint8Array(length);
-  window.crypto.getRandomValues(randomValues);
+  try {
+    if (typeof window !== 'undefined' && window.crypto && typeof window.crypto.getRandomValues === 'function') {
+      const randomValues = new Uint8Array(length);
+      window.crypto.getRandomValues(randomValues);
+      for (let i = 0; i < length; i++) {
+        randomString += charset[randomValues[i] % charset.length];
+      }
+      return randomString;
+    }
+  } catch (e) {
+    console.warn('[Auth Service] crypto.getRandomValues failed, using Math.random fallback', e);
+  }
+  
+  // Math.random fallback
+  randomString = '';
   for (let i = 0; i < length; i++) {
-    randomString += charset[randomValues[i] % charset.length];
+    randomString += charset.charAt(Math.floor(Math.random() * charset.length));
   }
   return randomString;
 };
@@ -148,7 +161,7 @@ const generateCodeChallenge = async (verifier: string) => {
   const hashBuffer = sha256Pure(verifier);
   return base64UrlEncode(hashBuffer);
 };
-// -- Resilient Storage Configuration & Helpers --
+// -- Resilient Storage Configuration & Helpers with In-Memory fallback for Iframes --
 interface StoredItem {
   value: string;
   createdAt: number;
@@ -163,14 +176,53 @@ const logDev = (message: string, ...args: any[]) => {
   }
 };
 
-const getValidStoredItem = (key: string, storage: Storage, storageName: 'sessionStorage' | 'localStorage'): StoredItem | null => {
-  const itemStr = storage.getItem(key);
+// In-Memory cache fallback when third-party iframe cookie/storage restrictions are active
+const memoryCache: Record<string, string> = {};
+
+const safeStorage = {
+  getItem(key: string): string | null {
+    try {
+      return sessionStorage.getItem(key) || localStorage.getItem(key) || memoryCache[key] || null;
+    } catch (e) {
+      return memoryCache[key] || null;
+    }
+  },
+  setItem(key: string, value: string) {
+    try {
+      sessionStorage.setItem(key, value);
+    } catch (e) {
+      // Ignore security block
+    }
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      // Ignore security block
+    }
+    memoryCache[key] = value;
+  },
+  removeItem(key: string) {
+    try {
+      sessionStorage.removeItem(key);
+    } catch (e) {
+      // Ignore security block
+    }
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      // Ignore security block
+    }
+    delete memoryCache[key];
+  }
+};
+
+const getValidStoredItem = (key: string, storageName: 'sessionStorage' | 'localStorage' | 'memory'): StoredItem | null => {
+  const itemStr = safeStorage.getItem(key);
   if (!itemStr) return null;
 
   try {
     const item = JSON.parse(itemStr);
     
-    // 5. Defensive Validation
+    // Defensive Validation
     if (
       item &&
       typeof item === 'object' &&
@@ -183,11 +235,11 @@ const getValidStoredItem = (key: string, storage: Storage, storageName: 'session
       return item;
     } else {
       logDev(`corrupted storage removed: ${key} in ${storageName}`);
-      storage.removeItem(key);
+      safeStorage.removeItem(key);
     }
   } catch (e) {
     logDev(`corrupted storage removed: ${key} in ${storageName}`);
-    storage.removeItem(key);
+    safeStorage.removeItem(key);
   }
   return null;
 };
@@ -200,55 +252,21 @@ export const saveOAuthState = (verifier: string, state: string) => {
   const stateStr = JSON.stringify(stateItem);
   const verifierStr = JSON.stringify(verifierItem);
 
-  sessionStorage.setItem('oauth_state', stateStr);
-  sessionStorage.setItem('pkce_code_verifier', verifierStr);
-
-  localStorage.setItem('oauth_state', stateStr);
-  localStorage.setItem('pkce_code_verifier', verifierStr);
+  safeStorage.setItem('oauth_state', stateStr);
+  safeStorage.setItem('pkce_code_verifier', verifierStr);
 
   logDev('OAuth state generated: ' + (state ? `${state.substring(0, 6)}...` : 'none'));
 };
 
 export const loadOAuthState = (): { verifier: string | null; state: string | null; expired: boolean } => {
-  let stateItem: StoredItem | null = null;
-  let verifierItem: StoredItem | null = null;
-  let source: 'sessionStorage' | 'localStorage' | null = null;
-
-  // 1. Attempt retrieval from sessionStorage
-  stateItem = getValidStoredItem('oauth_state', sessionStorage, 'sessionStorage');
-  verifierItem = getValidStoredItem('pkce_code_verifier', sessionStorage, 'sessionStorage');
-
-  if (stateItem && verifierItem) {
-    source = 'sessionStorage';
-  } else {
-    // Clear potentially incomplete/malformed storage in sessionStorage
-    sessionStorage.removeItem('oauth_state');
-    sessionStorage.removeItem('pkce_code_verifier');
-    stateItem = null;
-    verifierItem = null;
-  }
-
-  // 2. Attempt retrieval from localStorage if sessionStorage is empty/invalid
-  if (!stateItem || !verifierItem) {
-    stateItem = getValidStoredItem('oauth_state', localStorage, 'localStorage');
-    verifierItem = getValidStoredItem('pkce_code_verifier', localStorage, 'localStorage');
-
-    if (stateItem && verifierItem) {
-      source = 'localStorage';
-    } else {
-      // Clear potentially incomplete/malformed storage in localStorage
-      localStorage.removeItem('oauth_state');
-      localStorage.removeItem('pkce_code_verifier');
-      stateItem = null;
-      verifierItem = null;
-    }
-  }
+  const stateItem = getValidStoredItem('oauth_state', 'sessionStorage');
+  const verifierItem = getValidStoredItem('pkce_code_verifier', 'sessionStorage');
 
   if (!stateItem || !verifierItem) {
     return { verifier: null, state: null, expired: false };
   }
 
-  // 3. Expiration check (15 minutes limit)
+  // Expiration check (15 minutes limit)
   const now = Date.now();
   const isStateExpired = (now - stateItem.createdAt) > EXPIRATION_MS;
   const isVerifierExpired = (now - verifierItem.createdAt) > EXPIRATION_MS;
@@ -259,16 +277,6 @@ export const loadOAuthState = (): { verifier: string | null; state: string | nul
     return { verifier: null, state: null, expired: true };
   }
 
-  // 4. Storage Synchronization
-  if (source === 'localStorage') {
-    logDev('OAuth state restored: localStorage');
-    sessionStorage.setItem('oauth_state', JSON.stringify(stateItem));
-    sessionStorage.setItem('pkce_code_verifier', JSON.stringify(verifierItem));
-    logDev('storage synchronization completed');
-  } else if (source === 'sessionStorage') {
-    logDev('OAuth state restored: sessionStorage');
-  }
-
   return {
     verifier: verifierItem.value,
     state: stateItem.value,
@@ -277,11 +285,9 @@ export const loadOAuthState = (): { verifier: string | null; state: string | nul
 };
 
 export const clearOAuthState = () => {
-  sessionStorage.removeItem('oauth_state');
-  sessionStorage.removeItem('pkce_code_verifier');
-  localStorage.removeItem('oauth_state');
-  localStorage.removeItem('pkce_code_verifier');
-  sessionStorage.removeItem('auth_return_to');
+  safeStorage.removeItem('oauth_state');
+  safeStorage.removeItem('pkce_code_verifier');
+  safeStorage.removeItem('auth_return_to');
   logDev('OAuth cleanup completed');
 };
 
@@ -291,7 +297,7 @@ export const initiateOAuthFlow = async (action: 'login' | 'signup') => {
     const challenge = await generateCodeChallenge(verifier);
     const state = generateRandomString(32);
 
-    // Save state using resilient helper (sessionStorage + localStorage)
+    // Save state using resilient helper (with memory fallback)
     saveOAuthState(verifier, state);
 
     // Sanitize returnTo
@@ -308,7 +314,7 @@ export const initiateOAuthFlow = async (action: 'login' | 'signup') => {
     if (returnTo.startsWith('/callback')) {
       returnTo = '/';
     }
-    sessionStorage.setItem('auth_return_to', returnTo);
+    safeStorage.setItem('auth_return_to', returnTo);
 
     const redirectUri = getRedirectUri();
 
@@ -319,8 +325,30 @@ export const initiateOAuthFlow = async (action: 'login' | 'signup') => {
       action: action
     });
 
-    // Full-page redirect
-    window.location.href = authUrl;
+    // Check if running inside an iframe (e.g. AI Studio preview)
+    const isIframe = window.self !== window.top;
+
+    if (isIframe) {
+      console.log('[Auth Service] Inside iframe context. Initiating popup-based OAuth.');
+      const width = 600;
+      const height = 700;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+      
+      const popup = window.open(
+        authUrl,
+        'deriv_oauth_popup',
+        `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,status=no`
+      );
+
+      if (!popup) {
+        console.warn('[Auth Service] Popup blocked by browser. Falling back to top window redirect.');
+        window.top!.location.href = authUrl;
+      }
+    } else {
+      // Full-page redirect for standalone top window
+      window.location.href = authUrl;
+    }
     
     return true;
   } catch (error) {
