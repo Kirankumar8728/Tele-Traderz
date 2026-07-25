@@ -272,6 +272,7 @@ export const useDeriv = () => {
         socket.send(JSON.stringify({ statement: 1, limit: 50, description: 1 }));
         socket.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
         socket.send(JSON.stringify({ get_settings: 1 }));
+        socket.send(JSON.stringify({ get_account_status: 1 }));
 
         // Restore active proposals hosted on this specific WebSocket
         Object.entries(lastProposalParams.current).forEach(([type, params]) => {

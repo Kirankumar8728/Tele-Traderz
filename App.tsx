@@ -12,6 +12,8 @@ import { OAUTH_CLIENT_ID, NEW_APP_ID, exchangeCodeForToken } from './src/service
 const TradingChart = lazy(() => import('./components/TradingChart'));
 import { 
   ChevronDown, 
+  ChevronRight,
+  Check,
   User, 
   LogOut, 
   ExternalLink, 
@@ -1899,6 +1901,50 @@ const App: React.FC = () => {
                     )}
                   </div>
                 </div>
+              )}
+
+              {account && (
+                <button
+                  id="kyc-status-btn"
+                  onClick={() => window.open('https://app.deriv.com/account/proof-of-identity', '_blank')}
+                  className="w-full p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 flex items-center justify-between text-left transition-all group/kyc"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      accountStatus?.authentication?.identity?.status === 'verified' && 
+                      accountStatus?.authentication?.document?.status === 'verified'
+                        ? 'bg-green-500/10 text-green-500'
+                        : 'bg-yellow-500/10 text-yellow-500'
+                    }`}>
+                      {accountStatus?.authentication?.identity?.status === 'verified' && 
+                      accountStatus?.authentication?.document?.status === 'verified' ? (
+                        <CheckCircle2 className="w-5 h-5 text-green-500" />
+                      ) : (
+                        <Clock className="w-5 h-5 text-yellow-500 animate-pulse" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider">KYC Status</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {accountStatus?.authentication?.identity?.status === 'verified' && 
+                        accountStatus?.authentication?.document?.status === 'verified' ? (
+                          <>
+                            <span className="text-sm font-black text-green-500">Done</span>
+                            <span className="w-4 h-4 rounded-full bg-green-500/20 flex items-center justify-center text-green-500">
+                              <Check className="w-2.5 h-2.5 stroke-[3]" />
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-sm font-black text-yellow-500">KYC Pending</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-gray-500 group-hover/kyc:text-white transition-colors">
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Complete KYC</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                </button>
               )}
 
               {account && (
