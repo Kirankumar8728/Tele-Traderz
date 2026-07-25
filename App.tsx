@@ -113,37 +113,6 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const handlePopupMessage = async (event: MessageEvent) => {
-      const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
-        return;
-      }
-
-      if (event.data && event.data.type === 'OAUTH_CALLBACK_DATA') {
-        const { code, state, error } = event.data;
-        if (error || (code && state)) {
-          try {
-            const { handleOAuthCallback } = await import('./src/services/authService');
-            const { token, expiresAt, returnTo } = await handleOAuthCallback(code, state, error);
-            
-            window.dispatchEvent(new CustomEvent('OAUTH_SUCCESS_REDIRECT', {
-                detail: { token, expiresAt }
-            }));
-            window.history.replaceState({}, '', returnTo);
-          } catch (err: unknown) {
-            const errorMessage = err instanceof Error ? err.message : 'Unknown error during authentication';
-            setCustomAlert(errorMessage);
-          }
-        }
-      }
-    };
-    window.addEventListener('message', handlePopupMessage);
-    return () => {
-      window.removeEventListener('message', handlePopupMessage);
-    };
-  }, []);
-
-  useEffect(() => {
     const handleRedirectSuccess = (event: Event) => {
          const customEvent = event as CustomEvent;
          import('./src/services/authService').then(mod => {

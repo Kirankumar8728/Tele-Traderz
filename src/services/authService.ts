@@ -292,13 +292,22 @@ export const clearOAuthState = () => {
 };
 
 export const initiateOAuthFlow = async (action: 'login' | 'signup') => {
+  if (import.meta.env.DEV) {
+    console.log(`[Auth Service] Starting OAuth Flow Initialization for action: ${action}`);
+  }
   try {
     const verifier = generateRandomString(128);
     const challenge = await generateCodeChallenge(verifier);
     const state = generateRandomString(32);
+    if (import.meta.env.DEV) {
+      console.log('[Auth Service] PKCE generated successfully (Metadata: state & PKCE challenge prepared).');
+    }
 
     // Save state using resilient helper (with memory fallback)
     saveOAuthState(verifier, state);
+    if (import.meta.env.DEV) {
+      console.log('[Auth Service] OAuth state saved securely.');
+    }
 
     // Sanitize returnTo
     const currentUrl = new URL(window.location.href);
@@ -324,35 +333,27 @@ export const initiateOAuthFlow = async (action: 'login' | 'signup') => {
       redirectUri: redirectUri,
       action: action
     });
-
-    // Check if running inside an iframe (e.g. AI Studio preview)
-    const isIframe = window.self !== window.top;
-
-    if (isIframe) {
-      console.log('[Auth Service] Inside iframe context. Initiating popup-based OAuth.');
-      const width = 600;
-      const height = 700;
-      const left = window.screen.width / 2 - width / 2;
-      const top = window.screen.height / 2 - height / 2;
-      
-      const popup = window.open(
-        authUrl,
-        'deriv_oauth_popup',
-        `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,status=no`
-      );
-
-      if (!popup) {
-        console.warn('[Auth Service] Popup blocked by browser. Falling back to top window redirect.');
-        window.top!.location.href = authUrl;
-      }
-    } else {
-      // Full-page redirect for standalone top window
-      window.location.href = authUrl;
+    if (import.meta.env.DEV) {
+      console.log('[Auth Service] Authorization URL generated successfully (Metadata: redirectUri included).');
     }
+
+    if (import.meta.env.DEV) {
+      console.log('[Auth Service] Redirect starting. Navigating to authUrl...');
+    }
+    // Always use full-page redirect
+    window.location.href = authUrl;
     
     return true;
-  } catch (error) {
-    console.error(`[Auth Service] Could not initiate ${action}`, error);
+  } catch (error: any) {
+    if (import.meta.env.DEV) {
+      console.error('[Auth Service] Error in initiateOAuthFlow:', {
+        message: error?.message || String(error),
+        stack: error?.stack,
+        functionName: 'initiateOAuthFlow',
+        fileName: 'authService.ts',
+        error: error
+      });
+    }
     throw error;
   }
 };

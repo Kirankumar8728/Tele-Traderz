@@ -230,80 +230,8 @@ async function startServer() {
   // Deriv OAuth Callback Redirect Handler
   // ============================================================================
   app.get(["/callback", "/callback/"], (req: express.Request, res: express.Response) => {
-    const code = req.query.code as string;
-    const state = req.query.state as string;
-    const error = (req.query.error || req.query.error_description) as string;
-
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Authenticating...</title>
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              height: 100vh;
-              background: #0e1117;
-              color: #ffffff;
-              margin: 0;
-              text-align: center;
-            }
-            .loader {
-              border: 3px solid #1f2937;
-              border-top: 3px solid #eab308;
-              border-radius: 50%;
-              width: 32px;
-              height: 32px;
-              animation: spin 1s linear infinite;
-              margin-bottom: 16px;
-            }
-            h3 {
-              margin: 0 0 8px 0;
-              font-size: 18px;
-              font-weight: 600;
-            }
-            p {
-              margin: 0;
-              font-size: 14px;
-              color: #9ca3af;
-            }
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="loader"></div>
-          <h3>Connecting to Bynex Trader</h3>
-          <p>Please wait while we complete the secure handshake...</p>
-          <script>
-            try {
-              if (window.opener) {
-                window.opener.postMessage({
-                  type: 'OAUTH_CALLBACK_DATA',
-                  code: ${JSON.stringify(code || null)},
-                  state: ${JSON.stringify(state || null)},
-                  error: ${JSON.stringify(error || null)}
-                }, '*');
-                window.close();
-              } else {
-                const queryString = window.location.search;
-                window.location.href = "/" + queryString;
-              }
-            } catch (e) {
-              console.error("Popup communication error:", e);
-              const queryString = window.location.search;
-              window.location.href = "/" + queryString;
-            }
-          </script>
-        </body>
-      </html>
-    `);
+    const queryString = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+    res.redirect("/" + queryString);
   });
 
   // ============================================================================
