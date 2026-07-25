@@ -49,6 +49,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
   isConnected = false
 }) => {
   const [stake, setStake] = useState(10);
+  const [basis, setBasis] = useState<'stake' | 'payout'>('stake');
   const [duration, setDuration] = useState(2);
   const [durationUnit, setDurationUnit] = useState<'t' | 's' | 'm' | 'h' | 'd'>('m');
   const config = getCurrencyConfig(currency);
@@ -86,6 +87,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
           symbol: underlying_symbol,
           contract_type: type,
           amount: stake,
+          basis,
           duration,
           duration_unit: durationUnit,
         };
@@ -104,7 +106,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
 
     const timer = setTimeout(fetchProposals, delay);
     return () => clearTimeout(timer);
-  }, [underlying_symbol, tradeType, stake, duration, durationUnit, barrier, proposalTrigger, isConnected, isAuthenticated]);
+  }, [underlying_symbol, tradeType, stake, basis, duration, durationUnit, barrier, proposalTrigger, isConnected, isAuthenticated]);
 
   const [buyingTypes, setBuyingTypes] = useState<Set<string>>(new Set());
   const lastIdRef = useRef<string | null>(null);
@@ -271,9 +273,19 @@ const TradeForm: React.FC<TradeFormProps> = ({
       </div>
 
       <div className="grid grid-cols-2 gap-1.5">
-        {/* Stake Input */}
-        <div className="bg-white/5 rounded-xl border border-white/5 p-1.5">
-          <span className="block text-[7px] font-black text-gray-500 uppercase mb-0.5 tracking-wider">Stake ({currency})</span>
+        {/* Stake / Payout Input */}
+        <div className="bg-white/5 rounded-xl border border-white/5 p-1.5 flex flex-col justify-between">
+          <div className="flex justify-between items-center mb-0.5">
+            <span className="block text-[7px] font-black text-gray-500 uppercase tracking-wider">
+              {basis === 'stake' ? 'Stake' : 'Payout'} ({currency})
+            </span>
+            <button
+              onClick={() => setBasis(b => b === 'stake' ? 'payout' : 'stake')}
+              className="text-[7px] font-black text-red-500 hover:text-red-400 uppercase tracking-wider px-1 bg-white/5 rounded transition-colors"
+            >
+              Set {basis === 'stake' ? 'Payout' : 'Stake'}
+            </button>
+          </div>
           <input 
             type="number" 
             min={config.min}
@@ -341,25 +353,27 @@ const TradeForm: React.FC<TradeFormProps> = ({
 
       {/* Trade Buttons */}
       <div className="flex gap-2">
-        <div className="flex-1 flex flex-col gap-1">
-          {/* Payout Information Above Button */}
-          <div className="flex justify-between items-center px-1">
-            <span className="text-[9px] font-bold text-green-500/80">Payout</span>
-            {!isAuthenticated ? (
-              upData.proposal?.payout ? (
-                <span className="text-[10px] font-mono font-black text-green-400">
-                  {formatCurrency(parseFloat(upData.proposal.payout.toString()))}
-                </span>
-              ) : (
-                <span className="text-[10px] font-mono font-black text-gray-600">--</span>
-              )
-            ) : getProfitSummary(upData.proposal) ? (
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] font-mono font-black text-green-400">{getProfitSummary(upData.proposal)?.amount}</span>
-              </div>
-            ) : (
-              <span className="text-[10px] font-mono font-black text-gray-600">--</span>
-            )}
+        <div className="flex-1 flex flex-col gap-1.5">
+          {/* Trade Details Above Button */}
+          <div className="flex justify-between items-center px-1 text-[9px] font-bold text-gray-400">
+            <div className="flex flex-col text-left">
+              <span className="text-[8px] text-gray-500 uppercase tracking-wider">
+                {basis === 'stake' ? 'Est. Payout' : 'Req. Stake'}
+              </span>
+              <span className="text-[10px] font-mono font-black text-green-400">
+                {basis === 'stake' 
+                  ? (upData.proposal?.payout ? formatCurrency(parseFloat(upData.proposal.payout.toString())) : '--')
+                  : (upData.proposal?.ask_price ? formatCurrency(parseFloat(upData.proposal.ask_price.toString())) : '--')}
+              </span>
+            </div>
+            <div className="flex flex-col text-right">
+              <span className="text-[8px] text-gray-500 uppercase tracking-wider">Net Profit</span>
+              <span className="text-[10px] font-mono font-black text-green-500">
+                {getProfitSummary(upData.proposal) 
+                  ? `+${getProfitSummary(upData.proposal)?.amount} (${getProfitSummary(upData.proposal)?.percentage})` 
+                  : '--'}
+              </span>
+            </div>
           </div>
           
           <button 
@@ -380,25 +394,27 @@ const TradeForm: React.FC<TradeFormProps> = ({
           </button>
         </div>
 
-        <div className="flex-1 flex flex-col gap-1">
-          {/* Payout Information Above Button */}
-          <div className="flex justify-between items-center px-1">
-            <span className="text-[9px] font-bold text-red-500/80">Payout</span>
-            {!isAuthenticated ? (
-              downData.proposal?.payout ? (
-                <span className="text-[10px] font-mono font-black text-red-400">
-                  {formatCurrency(parseFloat(downData.proposal.payout.toString()))}
-                </span>
-              ) : (
-                <span className="text-[10px] font-mono font-black text-gray-600">--</span>
-              )
-            ) : getProfitSummary(downData.proposal) ? (
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] font-mono font-black text-red-400">{getProfitSummary(downData.proposal)?.amount}</span>
-              </div>
-            ) : (
-              <span className="text-[10px] font-mono font-black text-gray-600">--</span>
-            )}
+        <div className="flex-1 flex flex-col gap-1.5">
+          {/* Trade Details Above Button */}
+          <div className="flex justify-between items-center px-1 text-[9px] font-bold text-gray-400">
+            <div className="flex flex-col text-left">
+              <span className="text-[8px] text-gray-500 uppercase tracking-wider">
+                {basis === 'stake' ? 'Est. Payout' : 'Req. Stake'}
+              </span>
+              <span className="text-[10px] font-mono font-black text-red-400">
+                {basis === 'stake' 
+                  ? (downData.proposal?.payout ? formatCurrency(parseFloat(downData.proposal.payout.toString())) : '--')
+                  : (downData.proposal?.ask_price ? formatCurrency(parseFloat(downData.proposal.ask_price.toString())) : '--')}
+              </span>
+            </div>
+            <div className="flex flex-col text-right">
+              <span className="text-[8px] text-gray-500 uppercase tracking-wider">Net Profit</span>
+              <span className="text-[10px] font-mono font-black text-red-500">
+                {getProfitSummary(downData.proposal) 
+                  ? `+${getProfitSummary(downData.proposal)?.amount} (${getProfitSummary(downData.proposal)?.percentage})` 
+                  : '--'}
+              </span>
+            </div>
           </div>
 
           <button 

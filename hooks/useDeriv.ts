@@ -130,14 +130,24 @@ export const useDeriv = () => {
       Object.entries(lastProposalParams.current).forEach(([type, params]) => {
         if (!authWs.current || authWs.current.readyState !== WebSocket.OPEN) {
           pendingProposals.current.add(type);
-          socket.send(JSON.stringify({
+          const symbol = params.symbol || params.underlying_symbol;
+          const req_id = params.req_id || (type === 'CALL' || type === 'HIGHER' || type === 'TOUCH' || type === 'ONETOUCH' ? 100 : 200);
+          const payload: any = {
             proposal: 1,
             subscribe: 1,
-            basis: 'stake',
-            currency: 'USD',
+            basis: params.basis || 'stake',
+            currency: account?.currency || 'USD',
             ...params,
-            req_id: type === 'CALL' || type === 'HIGHER' || type === 'TOUCH' || type === 'ONETOUCH' ? 100 : 200
-          }));
+            req_id
+          };
+          if (socket.url.includes('api.derivws.com')) {
+            payload.underlying_symbol = symbol;
+            delete payload.symbol;
+          } else {
+            payload.symbol = symbol;
+            delete payload.underlying_symbol;
+          }
+          socket.send(JSON.stringify(payload));
         }
       });
     };
@@ -266,14 +276,24 @@ export const useDeriv = () => {
         // Restore active proposals hosted on this specific WebSocket
         Object.entries(lastProposalParams.current).forEach(([type, params]) => {
           pendingProposals.current.add(type);
-          socket.send(JSON.stringify({
+          const symbol = params.symbol || params.underlying_symbol;
+          const req_id = params.req_id || (type === 'CALL' || type === 'HIGHER' || type === 'TOUCH' || type === 'ONETOUCH' ? 100 : 200);
+          const payload: any = {
             proposal: 1,
             subscribe: 1,
-            basis: 'stake',
-            currency: 'USD',
+            basis: params.basis || 'stake',
+            currency: account?.currency || 'USD',
             ...params,
-            req_id: type === 'CALL' || type === 'HIGHER' || type === 'TOUCH' || type === 'ONETOUCH' ? 100 : 200
-          }));
+            req_id
+          };
+          if (socket.url.includes('api.derivws.com')) {
+            payload.underlying_symbol = symbol;
+            delete payload.symbol;
+          } else {
+            payload.symbol = symbol;
+            delete payload.underlying_symbol;
+          }
+          socket.send(JSON.stringify(payload));
         });
       };
 
