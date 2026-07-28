@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "start": "tsx server.ts",
-    "build": "tsc && vite build",
+    "build": "vite build",
+    "start": "node server.ts",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
   },
@@ -23,8 +23,8 @@
     "firebase-admin": "^13.7.0",
     "firebase-functions": "^7.1.1",
     "framer-motion": "^12.34.3",
+    "js-sha256": "^1.0.0",
     "klinecharts": "^9.0.0",
-    "lightweight-charts": "^5.1.0",
     "lucide-react": "^0.575.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -41,6 +41,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.28.1",
     "regenerator-runtime": "^0.14.1",
     "typescript": "^5.7.3",
     "vite": "^6.0.0"

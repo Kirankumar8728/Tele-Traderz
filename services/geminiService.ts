@@ -12,7 +12,7 @@ export const askDerivAssistant = async (prompt: string, history: { role: 'user' 
     
     // Correct method: using ai.models.generateContent directly with model name and content.
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-pro-preview', // Updated to 3.1 as per guidelines for complex tasks
+      model: 'gemini-3.6-flash',
       contents: [
         ...history.map(h => ({ 
           role: h.role === 'user' ? 'user' : 'model', 

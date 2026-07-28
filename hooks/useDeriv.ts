@@ -17,6 +17,7 @@ import {
   resetDemoBalanceRest,
 } from '../src/services/derivApiService';
 import { getInMemoryToken, clearInMemoryToken } from '../src/services/authService';
+import { ProposalEngine } from '../services/ProposalEngine';
 
 // ============================================================================
 // Utility / Helpers
@@ -145,7 +146,7 @@ export const useDeriv = () => {
     socket.onmessage = (msg) => {
       const data = JSON.parse(msg.data);
       if (data.error) {
-        console.error('[DEBUG PUBLIC] Error:', data.error);
+        console.warn('[Deriv WS] Notice:', data.error?.message || data.error);
         if (data.msg_type === 'proposal') {
           const pType = data.echo_req?.contract_type;
           if (pType) pendingProposals.current.delete(pType);
@@ -570,6 +571,11 @@ export const useDeriv = () => {
       }
     }
   }, [connectAuth]);
+
+  // Keep ProposalEngine's WebSockets synchronized with the active connections in this hook
+  useEffect(() => {
+    ProposalEngine.getInstance().syncWebSockets(publicWs.current, authWs.current);
+  }, [isConnected, publicWs.current, authWs.current]);
 
   useEffect(() => {
     connectPublic();

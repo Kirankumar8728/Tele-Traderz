@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TradeType, Timeframe, Proposal } from '../types';
 import { TrendingUp, TrendingDown, Target, ShieldAlert, ChevronDown, Settings, Loader2 } from 'lucide-react';
 import { getCurrencyConfig } from '../constants';
+import { ProposalCard } from './ProposalCard';
 
 interface TradeFormProps {
   underlying_symbol: string;
@@ -24,6 +25,7 @@ interface TradeFormProps {
   proposalTrigger?: number;
   currency?: string;
   isConnected?: boolean;
+  compact?: boolean;
 }
 
 const TradeForm: React.FC<TradeFormProps> = ({ 
@@ -46,7 +48,8 @@ const TradeForm: React.FC<TradeFormProps> = ({
   onTradeTypeChange,
   proposalTrigger = 0,
   currency = 'USD',
-  isConnected = false
+  isConnected = false,
+  compact = false
 }) => {
   const [stake, setStake] = useState(10);
   const [basis, setBasis] = useState<'stake' | 'payout'>('stake');
@@ -238,32 +241,40 @@ const TradeForm: React.FC<TradeFormProps> = ({
   const upData = getButtonData('up');
   const downData = getButtonData('down');
 
+  const [previewType, setPreviewType] = useState<string>('');
+
+  useEffect(() => {
+    if (upData?.type) {
+      setPreviewType(upData.type);
+    }
+  }, [tradeType, upData?.type]);
+
   return (
-    <div className="bg-[#141922] border-t border-white/5 p-[28px] space-y-4 z-30">
+    <div className={`z-30 ${compact ? 'space-y-2 p-0.5' : 'space-y-5 p-2.5 bg-[#0c0f17] rounded-3xl border border-white/5 shadow-2xl'}`}>
       {/* Trading Error Display (Moved Above Form) */}
       {error && (
         <div 
           id="table-error-msg" 
-          className="bg-[#cc2e3d]/15 text-[#cc2e3d] border border-[#cc2e3d] p-2.5 rounded-lg text-[12px] text-center font-bold animate-in fade-in slide-in-from-top-1 duration-300"
+          className="bg-rose-500/10 text-rose-400 border border-rose-500/15 p-2.5 rounded-xl text-xs text-center font-bold animate-in fade-in slide-in-from-top-1 duration-300"
         >
           {error}
         </div>
       )}
 
       {/* Trade Type Selector */}
-      <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+      <div className={`flex ${compact ? 'gap-1' : 'gap-1.5'} overflow-x-auto no-scrollbar pb-0.5`}>
         {[
-          { id: 'CALL', label: 'Rise/Fall', icon: <TrendingUp className="w-3 h-3" /> },
-          { id: 'HIGHER', label: 'Higher/Lower', icon: <TrendingUp className="w-3 h-3" /> },
-          { id: 'TOUCH', label: 'Touch/No Touch', icon: <Target className="w-3 h-3" /> },
+          { id: 'CALL', label: 'Rise/Fall', icon: <TrendingUp className={compact ? "w-3 h-3" : "w-3.5 h-3.5"} /> },
+          { id: 'HIGHER', label: 'Higher/Lower', icon: <TrendingUp className={compact ? "w-3 h-3" : "w-3.5 h-3.5"} /> },
+          { id: 'TOUCH', label: 'Touch/No Touch', icon: <Target className={compact ? "w-3 h-3" : "w-3.5 h-3.5"} /> },
         ].map(type => (
           <button
             key={type.id}
             onClick={() => onTradeTypeChange(type.id as TradeType)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase whitespace-nowrap border transition-all ${
+            className={`flex items-center ${compact ? 'gap-1 px-3 py-1.5 text-[9px]' : 'gap-1.5 px-4 py-2.5 text-[10.5px]'} rounded-full font-black uppercase whitespace-nowrap transition-all border ${
               tradeType === type.id
-                ? 'bg-red-600 border-red-600 text-white' 
-                : 'bg-white/5 border-white/5 text-gray-500'
+                ? 'bg-red-600 border-red-600 text-white shadow-lg shadow-red-600/15' 
+                : 'bg-white/[0.03] border-white/5 text-gray-400 hover:text-white hover:bg-white/[0.06]'
             }`}
           >
             {type.icon}
@@ -274,14 +285,14 @@ const TradeForm: React.FC<TradeFormProps> = ({
 
       <div className="grid grid-cols-2 gap-1.5">
         {/* Stake / Payout Input */}
-        <div className="bg-white/5 rounded-xl border border-white/5 p-1.5 flex flex-col justify-between">
-          <div className="flex justify-between items-center mb-0.5">
-            <span className="block text-[7px] font-black text-gray-500 uppercase tracking-wider">
-              {basis === 'stake' ? 'Stake' : 'Payout'} ({currency})
+        <div className={`bg-white/[0.02] hover:bg-white/[0.04] ${compact ? 'rounded-xl p-2' : 'rounded-2xl p-3'} border border-white/5 flex flex-col justify-between transition-colors`}>
+          <div className="flex justify-between items-center mb-1">
+            <span className={`block ${compact ? 'text-[7.5px]' : 'text-[8.5px]'} font-black text-gray-500 uppercase tracking-widest`}>
+              STAKE ({currency})
             </span>
             <button
               onClick={() => setBasis(b => b === 'stake' ? 'payout' : 'stake')}
-              className="text-[7px] font-black text-red-500 hover:text-red-400 uppercase tracking-wider px-1 bg-white/5 rounded transition-colors"
+              className={`${compact ? 'text-[7.5px] px-2 py-0.5' : 'text-[8.5px] px-2.5 py-0.5'} font-black text-red-500 hover:text-red-400 uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 rounded-full transition-all`}
             >
               Set {basis === 'stake' ? 'Payout' : 'Stake'}
             </button>
@@ -292,43 +303,46 @@ const TradeForm: React.FC<TradeFormProps> = ({
             step={config.step}
             value={stake} 
             onChange={(e) => setStake(Math.max(0, parseFloat(e.target.value) || 0))}
-            className="w-full bg-transparent text-xs font-mono font-black text-white outline-none" 
+            className={`w-full bg-transparent ${compact ? 'text-xs' : 'text-sm'} font-mono font-extrabold text-white outline-none mt-1`} 
           />
         </div>
 
         {/* Duration Input */}
-        <div className="bg-white/5 rounded-xl border border-white/5 p-1.5 flex justify-between items-center">
+        <div className={`bg-white/[0.02] hover:bg-white/[0.04] ${compact ? 'rounded-xl p-2' : 'rounded-2xl p-3'} border border-white/5 flex justify-between items-center transition-colors`}>
           <div className="flex-1">
-            <span className="block text-[7px] font-black text-gray-500 uppercase mb-0.5 tracking-wider">Duration</span>
+            <span className={`block ${compact ? 'text-[7.5px]' : 'text-[8.5px]'} font-black text-gray-400 uppercase mb-1 tracking-widest`}>DURATION</span>
             <input 
               type="number" 
               min="1"
               value={duration} 
               onChange={(e) => setDuration(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-full bg-transparent text-xs font-mono font-black text-white outline-none" 
+              className={`w-full bg-transparent ${compact ? 'text-xs' : 'text-sm'} font-mono font-extrabold text-white outline-none mt-1`} 
             />
           </div>
-          <select 
-            value={durationUnit}
-            onChange={(e) => setDurationUnit(e.target.value as any)}
-            className="bg-transparent text-[8px] font-black text-red-500 uppercase outline-none cursor-pointer ml-1"
-          >
-            <option value="t">Ticks</option>
-            <option value="s">Sec</option>
-            <option value="m">Min</option>
-            <option value="h">Hours</option>
-            <option value="d">Days</option>
-          </select>
+          <div className="relative flex items-center gap-1">
+            <select 
+              value={durationUnit}
+              onChange={(e) => setDurationUnit(e.target.value as any)}
+              className={`bg-transparent ${compact ? 'text-[9px]' : 'text-[10px]'} font-black text-red-500 uppercase outline-none cursor-pointer pr-4 appearance-none text-right select-none`}
+            >
+              <option value="t" className="bg-[#0c0f17]">TICKS</option>
+              <option value="s" className="bg-[#0c0f17]">SEC</option>
+              <option value="m" className="bg-[#0c0f17]">MIN</option>
+              <option value="h" className="bg-[#0c0f17]">HOURS</option>
+              <option value="d" className="bg-[#0c0f17]">DAYS</option>
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-red-500 absolute right-0 pointer-events-none stroke-[3px]" />
+          </div>
         </div>
 
         {/* Barrier Input (Conditional) */}
         {['HIGHER', 'LOWER', 'TOUCH', 'NOTOUCH', 'ONETOUCH'].includes(tradeType) && (
-          <div className="col-span-2 bg-white/5 rounded-xl border border-white/5 p-1.5">
-            <div className="flex justify-between items-center mb-0.5">
-              <span className="text-[7px] font-bold text-gray-500 uppercase">
+          <div className={`col-span-2 bg-white/[0.02] hover:bg-white/[0.04] ${compact ? 'rounded-xl p-2' : 'rounded-2xl p-3'} border border-white/5 flex flex-col justify-between transition-colors`}>
+            <div className="flex justify-between items-center mb-1">
+              <span className={`text-[8.5px] ${compact ? 'text-[7.5px]' : ''} font-black text-gray-500 uppercase tracking-widest`}>
                 Barrier {barrier.match(/^[+-]/) ? 'Offset' : 'Level'}
               </span>
-              <span className="text-[7px] font-mono font-bold text-gray-400">
+              <span className="text-[9px] font-mono font-bold text-gray-400 bg-white/5 px-2 py-0.5 rounded-lg border border-white/5">
                 Spot: {lastPrice.toFixed(4)}
               </span>
             </div>
@@ -337,12 +351,12 @@ const TradeForm: React.FC<TradeFormProps> = ({
                 type="text" 
                 value={barrier} 
                 onChange={(e) => onBarrierChange(e.target.value)}
-                className="w-full bg-transparent text-xs font-mono font-black text-white outline-none placeholder-gray-700" 
+                className={`w-full bg-transparent ${compact ? 'text-xs' : 'text-sm'} font-mono font-extrabold text-white outline-none placeholder-gray-700`} 
                 placeholder="+0.00 or 1234.56"
               />
               {/* Calculated Level Display */}
               {barrier.match(/^[+-]/) && lastPrice > 0 && !isNaN(parseFloat(barrier)) && (
-                <div className="text-[8px] font-mono font-bold text-gray-500 ml-2 whitespace-nowrap">
+                <div className="text-[9px] font-mono font-extrabold text-gray-400 ml-2 whitespace-nowrap bg-red-600/10 border border-red-500/10 px-2 py-0.5 rounded-lg">
                   = {(lastPrice + parseFloat(barrier)).toFixed(4)}
                 </div>
               )}
@@ -351,24 +365,23 @@ const TradeForm: React.FC<TradeFormProps> = ({
         )}
       </div>
 
-      {/* Trade Buttons */}
-      <div className="flex gap-2">
-        <div className="flex-1 flex flex-col gap-1.5">
-          {/* Trade Details Above Button */}
-          <div className="flex justify-between items-center px-1 text-[9px] font-bold text-gray-400">
+      {/* Trade Buttons & Details Layout */}
+      <div className={`flex ${compact ? 'gap-2' : 'gap-4'}`}>
+        {/* RISE (Call) Column */}
+        <div className={`flex-1 flex flex-col ${compact ? 'gap-1' : 'gap-2.5'}`}>
+          {/* Estimate Details */}
+          <div className="grid grid-cols-2 gap-1 px-1 text-[9px] font-bold text-gray-400">
             <div className="flex flex-col text-left">
-              <span className="text-[8px] text-gray-500 uppercase tracking-wider">
-                {basis === 'stake' ? 'Est. Payout' : 'Req. Stake'}
-              </span>
-              <span className="text-[10px] font-mono font-black text-green-400">
+              <span className={`${compact ? 'text-[7px]' : 'text-[7.5px]'} text-gray-500 uppercase tracking-widest font-black`}>Est. Payout</span>
+              <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} font-mono font-extrabold text-emerald-400 mt-0.5`}>
                 {basis === 'stake' 
                   ? (upData.proposal?.payout ? formatCurrency(parseFloat(upData.proposal.payout.toString())) : '--')
                   : (upData.proposal?.ask_price ? formatCurrency(parseFloat(upData.proposal.ask_price.toString())) : '--')}
               </span>
             </div>
             <div className="flex flex-col text-right">
-              <span className="text-[8px] text-gray-500 uppercase tracking-wider">Net Profit</span>
-              <span className="text-[10px] font-mono font-black text-green-500">
+              <span className={`${compact ? 'text-[7px]' : 'text-[7.5px]'} text-gray-500 uppercase tracking-widest font-black`}>Net Profit</span>
+              <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} font-mono font-extrabold text-emerald-400 mt-0.5`}>
                 {getProfitSummary(upData.proposal) 
                   ? `+${getProfitSummary(upData.proposal)?.amount} (${getProfitSummary(upData.proposal)?.percentage})` 
                   : '--'}
@@ -379,37 +392,36 @@ const TradeForm: React.FC<TradeFormProps> = ({
           <button 
             disabled={!upData.proposal || buyingTypes.has(upData.type)}
             onClick={() => handleTrade(upData.type)} 
-            className="h-14 bg-[#059669]/90 hover:bg-[#059669] active:scale-[0.98] transition-all rounded-xl flex items-center justify-center px-3 shadow-lg shadow-green-900/20 disabled:opacity-50 border border-white/5 relative overflow-hidden group"
+            className={`${compact ? 'h-10 rounded-xl' : 'h-14 rounded-2xl'} bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] transition-all flex items-center justify-center px-3 shadow-lg shadow-emerald-500/10 disabled:opacity-50 border border-white/5 relative overflow-hidden group green-glow cursor-pointer`}
           >
             <div className="flex items-center gap-2">
               {buyingTypes.has(upData.type) ? (
-                <Loader2 className="w-5 h-5 text-white animate-spin" />
+                <Loader2 className={`${compact ? 'w-4 h-4' : 'w-5 h-5'} text-white animate-spin`} />
               ) : (
-                <TrendingUp className="w-5 h-5 text-white stroke-[3px]" />
+                <TrendingUp className={`${compact ? 'w-4 h-4' : 'w-5 h-5'} text-white stroke-[3px]`} />
               )}
-              <span className="text-[13px] font-black text-white tracking-widest uppercase truncate">
+              <span className={`${compact ? 'text-xs' : 'text-sm'} font-extrabold text-white tracking-widest uppercase truncate`}>
                 {upData.label}
               </span>
             </div>
           </button>
         </div>
 
-        <div className="flex-1 flex flex-col gap-1.5">
-          {/* Trade Details Above Button */}
-          <div className="flex justify-between items-center px-1 text-[9px] font-bold text-gray-400">
+        {/* FALL (Put) Column */}
+        <div className={`flex-1 flex flex-col ${compact ? 'gap-1' : 'gap-2.5'}`}>
+          {/* Estimate Details */}
+          <div className="grid grid-cols-2 gap-1 px-1 text-[9px] font-bold text-gray-400">
             <div className="flex flex-col text-left">
-              <span className="text-[8px] text-gray-500 uppercase tracking-wider">
-                {basis === 'stake' ? 'Est. Payout' : 'Req. Stake'}
-              </span>
-              <span className="text-[10px] font-mono font-black text-red-400">
+              <span className={`${compact ? 'text-[7px]' : 'text-[7.5px]'} text-gray-500 uppercase tracking-widest font-black`}>Est. Payout</span>
+              <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} font-mono font-extrabold text-rose-400 mt-0.5`}>
                 {basis === 'stake' 
                   ? (downData.proposal?.payout ? formatCurrency(parseFloat(downData.proposal.payout.toString())) : '--')
                   : (downData.proposal?.ask_price ? formatCurrency(parseFloat(downData.proposal.ask_price.toString())) : '--')}
               </span>
             </div>
             <div className="flex flex-col text-right">
-              <span className="text-[8px] text-gray-500 uppercase tracking-wider">Net Profit</span>
-              <span className="text-[10px] font-mono font-black text-red-500">
+              <span className={`${compact ? 'text-[7px]' : 'text-[7.5px]'} text-gray-500 uppercase tracking-widest font-black`}>Net Profit</span>
+              <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} font-mono font-extrabold text-rose-400 mt-0.5`}>
                 {getProfitSummary(downData.proposal) 
                   ? `+${getProfitSummary(downData.proposal)?.amount} (${getProfitSummary(downData.proposal)?.percentage})` 
                   : '--'}
@@ -420,22 +432,21 @@ const TradeForm: React.FC<TradeFormProps> = ({
           <button 
             disabled={!downData.proposal || buyingTypes.has(downData.type)}
             onClick={() => handleTrade(downData.type)} 
-            className="h-14 bg-[#e11d48]/90 hover:bg-[#e11d48] active:scale-[0.98] transition-all rounded-xl flex items-center justify-center px-3 shadow-lg shadow-red-900/20 disabled:opacity-50 border border-white/5 relative overflow-hidden group"
+            className={`${compact ? 'h-10 rounded-xl' : 'h-14 rounded-2xl'} bg-rose-600 hover:bg-rose-500 active:scale-[0.98] transition-all flex items-center justify-center px-3 shadow-lg shadow-rose-600/10 disabled:opacity-50 border border-white/5 relative overflow-hidden group red-glow cursor-pointer`}
           >
             <div className="flex items-center gap-2">
               {buyingTypes.has(downData.type) ? (
-                <Loader2 className="w-5 h-5 text-white animate-spin" />
+                <Loader2 className={`${compact ? 'w-4 h-4' : 'w-5 h-5'} text-white animate-spin`} />
               ) : (
-                <TrendingDown className="w-5 h-5 text-white stroke-[3px]" />
+                <TrendingDown className={`${compact ? 'w-4 h-4' : 'w-5 h-5'} text-white stroke-[3px]`} />
               )}
-              <span className="text-[13px] font-black text-white tracking-widest uppercase truncate">
+              <span className={`${compact ? 'text-xs' : 'text-sm'} font-extrabold text-white tracking-widest uppercase truncate`}>
                 {downData.label}
               </span>
             </div>
           </button>
         </div>
       </div>
-
     </div>
   );
 };

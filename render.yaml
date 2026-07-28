@@ -22,8 +22,7 @@ services:
         sync: false
         description: "Your Deriv App ID (often identical to Client ID)"
       - key: VITE_REDIRECT_URI
-        sync: false
-        description: "Your Deriv OAuth redirect URI (e.g., https://bynex-trader.onrender.com/callback)"
+        value: "https://bynex-trader-i2we.onrender.com/callback"
       - key: TELEGRAM_BOT_TOKEN
         sync: false
         optional: true

@@ -13,22 +13,17 @@ const UTM_CAMPAIGN = import.meta.env.VITE_DERIV_UTM_CAMPAIGN;
  * Dynamically determines the redirect URI based on current environment.
  */
 export const getRedirectUri = () => {
-  const isDev = import.meta.env.DEV;
   const configuredUri = import.meta.env.VITE_REDIRECT_URI;
 
   if (configuredUri) {
     return configuredUri;
   }
 
-  if (isDev) {
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin}/callback`;
-    }
-    return 'http://localhost:3000/callback';
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/callback`;
   }
 
-  // In production, if VITE_REDIRECT_URI is missing, throw a clear configuration error
-  throw new Error('Configuration Error: VITE_REDIRECT_URI is not configured in the production environment.');
+  return 'http://localhost:3000/callback';
 };
 
 const API_BASE_URL = 'https://api.derivws.com';
@@ -187,18 +182,20 @@ export const generateAuthUrl = (params: {
   // Use the explicitly required redirect URI from user configuration
   const finalRedirectUri = params.redirectUri || getRedirectUri();
   
-  // 1. URL strictly as per instructions and DerivApi.txt
+  // 1. URL strictly as per instructions and DerivApi.txt / AGENTS.md guidelines
   const url = new URL('https://auth.deriv.com/oauth2/auth');
   
   // 2. Set strict parameters using URLSearchParams
   const searchParams = new URLSearchParams({
     response_type: 'code',
     client_id: OAUTH_CLIENT_ID,
+    app_id: OAUTH_CLIENT_ID,
     redirect_uri: finalRedirectUri,
     scope: OAUTH_SCOPE,
     state: params.state,
     code_challenge: params.codeChallenge,
-    code_challenge_method: 'S256'
+    code_challenge_method: 'S256',
+    utm_source: 'Bynex'
   });
 
   // 3. Add Signup specific parameters if needed
@@ -209,7 +206,6 @@ export const generateAuthUrl = (params: {
     // Official affiliate parameters
     if (AFFILIATE_ID) {
       searchParams.set('t', AFFILIATE_ID);
-      searchParams.set('utm_source', AFFILIATE_ID);
     }
 
     if (SIDC) {

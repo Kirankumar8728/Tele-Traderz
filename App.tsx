@@ -3,11 +3,26 @@ import { AppView, Timeframe, TradeType, WithdrawalRequest } from './types';
 import { getCurrencyConfig } from './constants';
 import { auth } from './firebase';
 import Navigation from './components/Navigation';
+import Sidebar from './components/Sidebar';
 import MarketSelector from './components/MarketSelector';
 import TradeForm from './components/TradeForm';
 import TradingToolbar from './components/TradingToolbar';
 import { useDeriv } from './hooks/useDeriv';
 import { OAUTH_CLIENT_ID, NEW_APP_ID, exchangeCodeForToken } from './src/services/derivApiService';
+
+// Import mobile premium layout modules
+import { useMobileLayout } from './hooks/useMobileLayout';
+import { useDrawings } from './hooks/useDrawings';
+import MobileHeader from './components/MobileHeader';
+import MobileChart from './components/MobileChart';
+import BottomNavigation from './components/BottomNavigation';
+import TradingBottomSheet from './components/TradingBottomSheet';
+import IndicatorBottomSheet from './components/IndicatorBottomSheet';
+import DrawingBottomSheet from './components/DrawingBottomSheet';
+import ChartSettingsSheet from './components/ChartSettingsSheet';
+import FloatingTradeButton from './components/FloatingTradeButton';
+import { P2PView } from './components/P2PView';
+import { CashierHub } from './components/CashierHub';
 
 const TradingChart = lazy(() => import('./components/TradingChart'));
 import { 
@@ -42,7 +57,12 @@ import {
   ShieldAlert,
   MessageCircle,
   FileText,
-  Loader2
+  Loader2,
+  Star,
+  Search,
+  Zap,
+  ChevronRight,
+  Activity
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -53,6 +73,15 @@ const TIMEFRAMES: Timeframe[] = ['1t', '1m', '2m', '3m', '5m', '10m', '15m', '30
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.TRADE);
+
+  // Responsive layout state & hook integrations
+  const { isMobile } = useMobileLayout();
+  const { drawingMode, setDrawingMode } = useDrawings();
+
+  const [mobileIndicatorsOpen, setMobileIndicatorsOpen] = useState(false);
+  const [mobileDrawingsOpen, setMobileDrawingsOpen] = useState(false);
+  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
+  const [mobileTradingOpen, setMobileTradingOpen] = useState(false);
   
   const Footer = () => (
     <div className="py-2 px-4 text-center opacity-50">
@@ -136,6 +165,33 @@ const App: React.FC = () => {
   }, []);
 
   const [selectedSymbol, setSelectedSymbol] = useState(() => localStorage.getItem('desi_selected_symbol') || '1HZ100V');
+
+  const [favoriteSymbols, setFavoriteSymbols] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('desi_favorite_markets') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const toggleFavorite = useCallback((symbol: string) => {
+    setFavoriteSymbols(prev => {
+      const updated = prev.includes(symbol)
+        ? prev.filter(s => s !== symbol)
+        : [...prev, symbol];
+      localStorage.setItem('desi_favorite_markets', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const [marketSearch, setMarketSearch] = useState('');
+  const [marketCategory, setMarketCategory] = useState('favorites');
+
+  useEffect(() => {
+    if (favoriteSymbols.length === 0 && marketCategory === 'favorites') {
+      setMarketCategory('all');
+    }
+  }, [favoriteSymbols]);
 
   useEffect(() => {
     localStorage.setItem('desi_selected_symbol', selectedSymbol);
@@ -589,79 +645,55 @@ const App: React.FC = () => {
     switch (currentView) {
       case AppView.TRADE:
         return (
-          <div className="relative h-full flex flex-col bg-[#0b0e14] flex-1 overflow-y-auto pb-28">
-            {/* Market Header */}
-            <div className="sticky top-2 left-2 right-2 flex items-center justify-between z-50 pointer-events-none mx-2">
-              <div className="pointer-events-auto">
-                <button 
-                  onClick={() => setShowMarketSelector(true)}
-                  className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 hover:bg-black/60 transition-all"
-                >
-                  <div className="flex flex-col items-start">
-                    <span className="text-[9px] font-black text-red-500 uppercase tracking-widest leading-none mb-0.5">
-                      {currentMarket.market.replace('_', ' ')}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-black text-white">{currentMarket.underlying_symbol_name}</span>
-                      <ChevronDown className="w-3 h-3 text-red-500" />
-                    </div>
-                  </div>
-                </button>
-              </div>
-
-              <div className="flex flex-col items-end bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 pointer-events-auto">
-                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest leading-none mb-0.5">Last Price</span>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-mono font-black text-white tabular-nums">
-                    {lastTick?.underlying_symbol === selectedSymbol ? lastTick?.quote.toFixed(4) : '...'}
-                  </span>
-                  {lastTick?.underlying_symbol === selectedSymbol && lastTick?.change !== 0 && (
-                    <span className={`text-[9px] font-bold ${lastTick.change > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      {lastTick.change > 0 ? '+' : ''}{lastTick.change.toFixed(4)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="w-full h-[40vh] min-h-[300px] relative flex-shrink-0">
+          <div className="relative h-full w-full flex flex-row bg-[#0b0e14] overflow-hidden">
+            {/* Left side: Dominant full-height Trading Chart */}
+            <div className="flex-1 h-full flex flex-col min-w-0 relative bg-[#07090e]">
               <ErrorBoundary>
-                <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-muted-foreground bg-surface rounded-lg">Loading Chart Engine...</div>}>
+                <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-muted-foreground bg-[#07090e] rounded-lg">Loading Chart Engine...</div>}>
                   <TradingChart 
                     underlying_symbol={selectedSymbol} 
                     timeframe={timeframe}
                     onTimeframeChange={setTimeframe}
                     barrier={activeBarrier ?? (['HIGHER', 'LOWER', 'TOUCH', 'NOTOUCH', 'ONETOUCH'].includes(tradeType) ? userBarrier : undefined)}
                     openPositions={filteredOpenPositions}
+                    onMarketSelectorOpen={() => setShowMarketSelector(true)}
+                    onSymbolSelect={setSelectedSymbol}
                   />
                 </Suspense>
               </ErrorBoundary>
             </div>
 
-            <div className="w-full z-10 flex-shrink-0 pb-4">
-              <TradeForm 
-                underlying_symbol={selectedSymbol}
-                onTrade={send}
-                proposals={proposals}
-                subscribeProposal={subscribeProposal}
-                clearProposals={clearProposals}
-                clearError={clearError}
-                isTrading={isTrading}
-                balance={account?.balance || 0}
-                error={error}
-                isAuthenticated={!!account}
-                onLogin={login}
-                onShowLoginModal={() => setShowLoginModal(true)}
-                barrier={userBarrier}
-                onBarrierChange={setUserBarrier}
-                lastPrice={lastTick?.underlying_symbol === selectedSymbol ? lastTick?.quote : 0}
-                tradeType={tradeType}
-                onTradeTypeChange={setTradeType}
-                proposalTrigger={proposalTrigger}
-                currency={account?.currency}
-                isConnected={isConnected}
-              />
-              <div className="mt-3 text-center px-4">
+            {/* Right side: Sleek sidebar Trade execution panel */}
+            <div className="w-[340px] xl:w-[370px] border-l border-white/5 bg-[#0b0e14] h-full flex flex-col p-4 overflow-y-auto no-scrollbar flex-shrink-0 z-10 justify-between gap-4">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-red-500">Order Execution</span>
+                  <span className="text-[9px] font-bold text-gray-500 uppercase">{selectedSymbol}</span>
+                </div>
+                <TradeForm 
+                  underlying_symbol={selectedSymbol}
+                  onTrade={send}
+                  proposals={proposals}
+                  subscribeProposal={subscribeProposal}
+                  clearProposals={clearProposals}
+                  clearError={clearError}
+                  isTrading={isTrading}
+                  balance={account?.balance || 0}
+                  error={error}
+                  isAuthenticated={!!account}
+                  onLogin={login}
+                  onShowLoginModal={() => setShowLoginModal(true)}
+                  barrier={userBarrier}
+                  onBarrierChange={setUserBarrier}
+                  lastPrice={lastTick?.underlying_symbol === selectedSymbol ? lastTick?.quote : 0}
+                  tradeType={tradeType}
+                  onTradeTypeChange={setTradeType}
+                  proposalTrigger={proposalTrigger}
+                  currency={account?.currency}
+                  isConnected={isConnected}
+                />
+              </div>
+              <div className="pt-2 border-t border-white/5 text-center">
                 <p className="text-[8px] text-gray-500 leading-tight">
                   <span className="font-bold">Risk Warning:</span> Trading involves significant risk and can result in the loss of your invested capital. Please ensure you fully understand the risks involved before trading.
                 </p>
@@ -813,111 +845,21 @@ const App: React.FC = () => {
 
       case AppView.CASHIER:
         return (
-          <div className="p-6 space-y-6 text-center relative z-10">
-            <div className="flex flex-col items-center mb-4">
-              <div className="w-16 h-16 bg-red-600/10 rounded-full flex items-center justify-center mb-4">
-                <Wallet className="w-8 h-8 text-red-500" />
-              </div>
-              <h2 className="text-2xl font-black italic uppercase">Cashier Hub</h2>
-              <p className="text-xs text-gray-500 uppercase font-bold tracking-widest mt-1">Secure Financial Portal</p>
-            </div>
-            
-            <div className="grid grid-cols-1 gap-4">
-              <button 
-                onClick={() => send({ cashier: 'deposit' })} 
-                className="p-6 bg-green-500/5 border border-green-500/10 rounded-[2rem] text-left hover:bg-green-500/10 transition-all group"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-lg font-black text-green-500 uppercase italic">Deposit Funds</h3>
-                  <ArrowUpRight className="w-5 h-5 text-green-500 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                </div>
-                <p className="text-[10px] font-bold text-gray-500 uppercase leading-relaxed">Instantly fund your account using cards, e-wallets, or crypto via Deriv.</p>
-              </button>
+          <CashierHub 
+            account={account} 
+            send={send} 
+            onNavigateToP2P={() => setCurrentView(AppView.P2P)} 
+            setCustomAlert={setCustomAlert} 
+          />
+        );
 
-              <div className="p-6 bg-red-500/5 border border-red-500/10 rounded-[2rem] text-left space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-black text-red-500 uppercase italic">Withdraw Funds</h3>
-                  <ArrowDownRight className="w-5 h-5 text-red-500" />
-                </div>
-                <p className="text-[10px] font-bold text-gray-500 uppercase leading-relaxed">Securely transfer your trading balance to your preferred method via Deriv.</p>
-                
-                {!showWithdrawVerify ? (
-                  <button 
-                    onClick={() => {
-                      if (account && account.is_virtual) {
-                        setCustomAlert("Demo accounts cannot withdraw funds. Please switch to a real account.");
-                        return;
-                      }
-                      if (account && !account.is_virtual && account.balance <= 0) {
-                        setCustomAlert("Your real account balance is 0. Make a deposit and try again.");
-                        return;
-                      }
-                      setIsSendingVerify(true);
-                      send({ verify_email: account?.email, type: 'payment_withdraw' });
-                      setTimeout(() => {
-                        setIsSendingVerify(false);
-                        setShowWithdrawVerify(true);
-                      }, 1500);
-                    }}
-                    disabled={isSendingVerify || !account}
-                    className="w-full py-3 bg-red-600 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-red-600/20 disabled:opacity-50"
-                  >
-                    {isSendingVerify ? 'Sending Email...' : 'Send Verification Email'}
-                  </button>
-                ) : (
-                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                    <p className="text-[8px] font-bold text-gray-400 uppercase">Enter the code sent to your email</p>
-                    <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        value={withdrawVerifyCode}
-                        onChange={(e) => setWithdrawVerifyCode(e.target.value)}
-                        placeholder="Verification Code"
-                        className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-xs font-mono font-bold outline-none focus:border-red-500/50"
-                      />
-                      <button 
-                        type="button"
-                        onClick={() => {
-                          if (account && account.is_virtual) {
-                            setCustomAlert("Demo accounts cannot withdraw funds. Please switch to a real account.");
-                            return;
-                          }
-                          if (account && !account.is_virtual && account.balance <= 0) {
-                            setCustomAlert("Your real account balance is 0. Make a deposit and try again.");
-                            return;
-                          }
-                          if (withdrawVerifyCode.trim()) {
-                            send({ cashier: 'withdraw', verification_code: withdrawVerifyCode.trim() });
-                          }
-                        }}
-                        disabled={!withdrawVerifyCode.trim()}
-                        className="px-4 py-2 bg-red-600 rounded-xl font-black text-[10px] uppercase disabled:opacity-50"
-                      >
-                        Go
-                      </button>
-                    </div>
-                    <button 
-                      onClick={() => setShowWithdrawVerify(false)}
-                      className="text-[8px] font-bold text-gray-500 uppercase hover:text-white"
-                    >
-                      Resend Email
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <button 
-                onClick={() => window.open('https://dp2p.deriv.com/', '_blank')} 
-                className="p-6 bg-blue-500/5 border border-blue-500/10 rounded-[2rem] text-left hover:bg-blue-500/10 transition-all group"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-lg font-black text-blue-500 uppercase italic">Deriv P2P</h3>
-                  <Globe className="w-5 h-5 text-blue-500 group-hover:rotate-12 transition-transform" />
-                </div>
-                <p className="text-[10px] font-bold text-gray-500 uppercase leading-relaxed">Exchange local currency with other traders in your region via Deriv P2P.</p>
-              </button>
-            </div>
-          </div>
+      case AppView.P2P:
+        return (
+          <P2PView 
+            account={account} 
+            send={send} 
+            onBackToCashier={() => setCurrentView(AppView.CASHIER)} 
+          />
         );
 
       case AppView.WITHDRAW:
@@ -1407,48 +1349,185 @@ const App: React.FC = () => {
           </div>
         );
 
-      case AppView.MARKETS:
+      case AppView.MARKETS: {
+        const categories = [
+          { id: 'favorites', name: 'Favorites', icon: <Star className="w-4 h-4" /> },
+          { id: 'all', name: 'All Markets', icon: <Globe className="w-4 h-4" /> },
+          { id: 'synthetic_index', name: 'Synthetic Indices', icon: <Zap className="w-4 h-4" /> },
+          { id: 'forex', name: 'Forex', icon: <Globe className="w-4 h-4" /> },
+          { id: 'indices', name: 'Stock Indices', icon: <TrendingUp className="w-4 h-4" /> },
+          { id: 'commodities', name: 'Commodities', icon: <Activity className="w-4 h-4" /> }
+        ];
+
+        const filteredMarketsList = (markets || []).filter(m => {
+          const name = m.underlying_symbol_name || '';
+          const symbol = m.underlying_symbol || '';
+          const matchesSearch = 
+            name.toLowerCase().includes(marketSearch.toLowerCase()) ||
+            symbol.toLowerCase().includes(marketSearch.toLowerCase());
+          
+          let matchesCategory = false;
+          if (marketCategory === 'all') {
+            matchesCategory = true;
+          } else if (marketCategory === 'favorites') {
+            matchesCategory = favoriteSymbols.includes(m.underlying_symbol);
+          } else {
+            matchesCategory = m.market === marketCategory;
+          }
+          
+          return matchesSearch && matchesCategory;
+        });
+
+        // Group filtered markets by submarket for organized layout
+        const groupedMarkets = filteredMarketsList.reduce((acc, m) => {
+          const submarketKey = m.submarket_display_name || m.submarket || 'Other';
+          if (!acc[submarketKey]) acc[submarketKey] = [];
+          acc[submarketKey].push(m);
+          return acc;
+        }, {} as Record<string, typeof markets>);
+
         return (
           <div className="p-6 space-y-6 h-full overflow-y-auto pb-24">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xl font-black italic uppercase">Active Markets</h2>
-              <Globe className="w-5 h-5 text-red-500" />
+              <h2 className="text-xl font-black italic uppercase">Market Explorer</h2>
+              <Globe className="w-5 h-5 text-red-500 animate-pulse" />
             </div>
 
-            <div className="grid grid-cols-1 gap-3">
-              {(markets || []).map((m, idx) => (
+            {/* Search Input */}
+            <div className="relative group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-red-500 transition-colors" />
+              <input 
+                type="text" 
+                placeholder="Search markets by name or symbol..." 
+                value={marketSearch}
+                onChange={(e) => setMarketSearch(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-11 pr-12 text-sm font-bold outline-none focus:border-red-500/50 focus:bg-white/[0.07] transition-all placeholder:text-gray-600"
+              />
+              {marketSearch && (
+                <button 
+                  onClick={() => setMarketSearch('')}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded-full"
+                >
+                  <X className="w-3 h-3 text-gray-400" />
+                </button>
+              )}
+            </div>
+
+            {/* Category Tabs */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+              {categories.map(cat => (
                 <button
-                  key={m.underlying_symbol || `market-list-${idx}`}
-                  onClick={() => {
-                    setSelectedSymbol(m.underlying_symbol);
-                    setCurrentView(AppView.TRADE);
-                  }}
-                  className={`p-4 rounded-2xl border transition-all flex items-center justify-between group ${
-                    selectedSymbol === m.underlying_symbol 
-                      ? 'bg-red-600/10 border-red-600/50' 
-                      : 'bg-white/5 border-white/5 hover:bg-white/10'
+                  key={cat.id}
+                  onClick={() => setMarketCategory(cat.id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black whitespace-nowrap transition-all border ${
+                    marketCategory === cat.id 
+                      ? 'bg-red-600 border-red-500 text-white shadow-lg shadow-red-900/20' 
+                      : 'bg-white/5 border-white/5 text-gray-500 hover:bg-white/10 hover:text-gray-300'
                   }`}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      selectedSymbol === m.underlying_symbol ? 'bg-red-600 text-white' : 'bg-white/10 text-gray-400'
-                    }`}>
-                      <TrendingUp className="w-5 h-5" />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-black text-white uppercase">{m.underlying_symbol_name}</p>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase">{m.market.replace('_', ' ')} • {m.submarket.replace('_', ' ')}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-bold text-red-500 uppercase opacity-0 group-hover:opacity-100 transition-opacity">Select</p>
-                  </div>
+                  {cat.id === 'favorites' ? (
+                    <Star className={`w-4 h-4 ${favoriteSymbols.length > 0 ? 'text-yellow-500 fill-yellow-500 animate-pulse' : ''}`} />
+                  ) : cat.icon}
+                  {cat.name}
+                  {cat.id === 'favorites' && favoriteSymbols.length > 0 && (
+                    <span className="ml-1 bg-white/20 text-white rounded-full text-[9px] font-black px-1.5 py-0.5">
+                      {favoriteSymbols.length}
+                    </span>
+                  )}
                 </button>
               ))}
+            </div>
+
+            {/* Markets List grouped by submarket */}
+            <div className="space-y-6">
+              {Object.keys(groupedMarkets).length > 0 ? (
+                Object.entries(groupedMarkets).map(([submarket, submarketMarkets]) => (
+                  <div key={submarket} className="space-y-3">
+                    <div className="flex items-center gap-2 px-2">
+                      <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{submarket}</h3>
+                      <div className="flex-1 h-px bg-white/5" />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3">
+                      {submarketMarkets.map((m, idx) => (
+                        <div
+                          key={m.underlying_symbol || `market-list-${idx}`}
+                          onClick={() => {
+                            setSelectedSymbol(m.underlying_symbol);
+                            setCurrentView(AppView.TRADE);
+                          }}
+                          className={`p-4 rounded-2xl border transition-all flex items-center justify-between group cursor-pointer ${
+                            selectedSymbol === m.underlying_symbol 
+                              ? 'bg-red-600/10 border-red-600/40' 
+                              : 'bg-white/5 border-white/5 hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-xs ${
+                              selectedSymbol === m.underlying_symbol ? 'bg-red-600 text-white' : 'bg-white/10 text-gray-400'
+                            }`}>
+                              {(m.underlying_symbol || '').substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="text-left">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-black text-white uppercase">{m.underlying_symbol_name}</p>
+                                {m.market === 'synthetic_index' && (
+                                  <span className="px-1.5 py-0.5 rounded bg-green-500/20 text-green-500 text-[8px] font-black uppercase tracking-tighter flex items-center gap-1">
+                                    <Clock className="w-2 h-2" />
+                                    24/7
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] font-bold text-gray-500 uppercase mt-0.5">{m.market.replace('_', ' ')} • {m.submarket.replace('_', ' ')}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleFavorite(m.underlying_symbol);
+                              }}
+                              className="p-2.5 hover:bg-white/10 rounded-xl transition-colors z-20"
+                              aria-label={favoriteSymbols.includes(m.underlying_symbol) ? "Unfavorite" : "Favorite"}
+                            >
+                              <Star 
+                                className={`w-4.5 h-4.5 transition-transform hover:scale-110 active:scale-95 ${
+                                  favoriteSymbols.includes(m.underlying_symbol) 
+                                    ? 'text-yellow-500 fill-yellow-500' 
+                                    : 'text-gray-500 hover:text-gray-300'
+                                }`} 
+                              />
+                            </button>
+                            <ChevronRight className={`w-4 h-4 transition-transform group-hover:translate-x-1 ${
+                              selectedSymbol === m.underlying_symbol ? 'text-red-500' : 'text-gray-600'
+                            }`} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                    <Search className="w-8 h-8 text-gray-700" />
+                  </div>
+                  <h3 className="text-lg font-black text-gray-400">No markets found</h3>
+                  <p className="text-sm text-gray-600 mt-1 max-w-[200px]">Try searching or choosing another category</p>
+                  <button 
+                    onClick={() => { setMarketSearch(''); setMarketCategory('all'); }}
+                    className="mt-6 px-6 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-black text-gray-400 transition-colors"
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              )}
             </div>
             <Footer />
           </div>
         );
+      }
 
       case AppView.PROFILE:
         return (
@@ -1713,60 +1792,394 @@ const App: React.FC = () => {
     }
   };
 
-  return (
-    <div className="flex flex-col h-screen bg-[#0b0e14] text-white overflow-hidden font-sans">
-      <header className="min-h-[3.5rem] pt-[env(safe-area-inset-top)] bg-[#141922] border-b border-white/10 px-4 flex items-center justify-between z-50 flex-shrink-0">
-        <div className="flex flex-col">
-          <h1 className="text-base font-black italic tracking-tighter text-red-500 leading-none">BYNEX TRADER</h1>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <div className={`w-1.5 h-1.5 rounded-full ${
-              isConnected ? 'bg-green-500 animate-pulse' : 
-              isReconnecting ? 'bg-yellow-500 animate-bounce' : 
-              'bg-red-500'
-            }`} />
-            <span className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">
-              {isConnected ? 'Master Terminal' : isReconnecting ? 'Reconnecting...' : 'Offline'}
-            </span>
-          </div>
-        </div>
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-screen bg-[#07090e] text-white overflow-hidden font-sans select-none pb-[env(safe-area-inset-bottom,0px)]">
+        {/* Mobile Header with Market & Profile toggles */}
+        <MobileHeader
+          account={account}
+          isConnected={isConnected}
+          isReconnecting={isReconnecting}
+          onAccountMenuOpen={() => setShowAccountMenu(true)}
+          onLoginClick={() => setShowLoginModal(true)}
+        />
 
-        <div className="flex items-center gap-3">
-          {!account && (
-            <button 
-              onClick={() => setShowLoginModal(true)}
-              className="hidden sm:block px-4 py-2 bg-red-600 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-red-600/20 hover:bg-red-500 transition-all"
-            >
-              Login
-            </button>
-          )}
-          <div onClick={() => setShowAccountMenu(true)} className="flex flex-col items-end cursor-pointer group bg-white/5 px-2 py-1 rounded-lg border border-white/5 hover:border-red-500/30 transition-all">
-            <span className="text-xs font-mono font-black tabular-nums group-hover:text-red-500 transition-colors">
-              {account ? `${Number(account.balance).toFixed(getCurrencyConfig(account.currency).decimals)} ${account.currency}` : '0.00 USD'}
-            </span>
-            <div className="flex items-center gap-1">
-              <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter">
-                {account ? (account.is_virtual ? 'Demo Mode' : 'Real Account') : 'Guest Mode'}
-              </span>
-              <ChevronDown className="w-2 h-2 text-gray-500" />
+        {/* Scrollable / Flexible content view */}
+        <main className={`flex-1 relative min-h-0 ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-[130px]'}`}>
+          {currentView === AppView.TRADE ? (
+            <div className="flex-1 flex flex-col min-h-0 w-full overflow-hidden bg-[#07090e]">
+              <div className="flex-1 min-h-0 relative flex flex-col">
+                <MobileChart
+                  timeframe={timeframe}
+                  onTimeframeChange={setTimeframe}
+                  selectedSymbol={selectedSymbol}
+                  onMarketSelectorOpen={() => setShowMarketSelector(true)}
+                  onIndicatorsClick={() => setMobileIndicatorsOpen(true)}
+                  onDrawingsClick={() => setMobileDrawingsOpen(true)}
+                  onSettingsClick={() => setMobileSettingsOpen(true)}
+                  isLoading={!isConnected}
+                  chartError={error}
+                  onRetry={clearError}
+                  lastPrice={lastTick?.underlying_symbol === selectedSymbol ? lastTick?.quote : 0}
+                  drawingMode={drawingMode}
+                  setDrawingMode={setDrawingMode}
+                >
+                  <ErrorBoundary>
+                    <Suspense fallback={
+                      <div className="flex h-full w-full items-center justify-center text-gray-500 bg-black/10">
+                        <div className="w-6 h-6 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    }>
+                      <TradingChart 
+                        underlying_symbol={selectedSymbol} 
+                        timeframe={timeframe}
+                        onTimeframeChange={setTimeframe}
+                        barrier={activeBarrier ?? (['HIGHER', 'LOWER', 'TOUCH', 'NOTOUCH', 'ONETOUCH'].includes(tradeType) ? userBarrier : undefined)}
+                        openPositions={filteredOpenPositions}
+                        onMarketSelectorOpen={() => setShowMarketSelector(true)}
+                        onSymbolSelect={setSelectedSymbol}
+                      />
+                    </Suspense>
+                  </ErrorBoundary>
+                </MobileChart>
+              </div>
+
+              {/* Compact Trade Execution Panel directly below the chart area */}
+              <div className="bg-[#0c0f17] border-t border-white/5 pt-1.5 px-3 flex-shrink-0 max-h-[42vh] overflow-y-auto no-scrollbar mb-[68px] pb-[env(safe-area-inset-bottom,16px)]">
+                <TradeForm 
+                  underlying_symbol={selectedSymbol}
+                  onTrade={send}
+                  proposals={proposals}
+                  subscribeProposal={subscribeProposal}
+                  clearProposals={clearProposals}
+                  clearError={clearError}
+                  isTrading={isTrading}
+                  balance={account?.balance || 0}
+                  error={error}
+                  isAuthenticated={!!account}
+                  onLogin={login}
+                  onShowLoginModal={() => setShowLoginModal(true)}
+                  barrier={userBarrier}
+                  onBarrierChange={setUserBarrier}
+                  lastPrice={lastTick?.underlying_symbol === selectedSymbol ? lastTick?.quote : 0}
+                  tradeType={tradeType}
+                  onTradeTypeChange={setTradeType}
+                  proposalTrigger={proposalTrigger}
+                  currency={account?.currency}
+                  isConnected={isConnected}
+                  compact={true}
+                />
+              </div>
             </div>
-          </div>
-          <button onClick={() => setShowAccountMenu(true)} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:border-red-500/50 transition-all shadow-inner">
-            <User className="w-4 h-4 text-gray-400" />
-          </button>
-        </div>
-      </header>
+          ) : (
+            <div className="p-4 space-y-4">
+              {renderContent()}
+              <div className="py-6 text-center opacity-40">
+                <p className="text-[9px] font-black uppercase tracking-[0.15em]">Powered by Deriv</p>
+                <p className="text-[7px] font-bold uppercase tracking-widest mt-0.5">Secure Mobile Channel • 18+</p>
+              </div>
+            </div>
+          )}
+        </main>
 
-      <main className={`flex-1 relative ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-28'}`}>
-        {renderContent()}
-        {currentView !== AppView.TRADE && (
-          <div className="py-6 pb-12 text-center opacity-60">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50">Powered by Deriv</p>
-            <p className="text-[8px] font-bold uppercase tracking-widest mt-1 text-white/40">Secure Trading • 18+ • Responsible Trading</p>
+        {/* Standard 5-tab Touch Navigation */}
+        <BottomNavigation currentView={currentView} onViewChange={setCurrentView} />
+
+        {/* Premium Draggable Sliding Bottom Sheets */}
+        <AnimatePresence>
+          {showMarketSelector && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[150] flex items-end justify-center">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowMarketSelector(false)}
+                className="absolute inset-0"
+              />
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+                className="w-full max-w-md bg-[#141922] border-t border-white/10 rounded-t-[2rem] max-h-[85vh] overflow-y-auto z-[160] shadow-2xl"
+              >
+                <div className="w-12 h-1.5 bg-white/15 rounded-full mx-auto my-3" />
+                <MarketSelector 
+                  key="market-selector"
+                  markets={markets} 
+                  selectedSymbol={selectedSymbol} 
+                  favoriteSymbols={favoriteSymbols}
+                  onToggleFavorite={toggleFavorite}
+                  onSelect={(sym) => {
+                    setSelectedSymbol(sym);
+                    setShowMarketSelector(false);
+                  }} 
+                  onClose={() => setShowMarketSelector(false)} 
+                />
+              </motion.div>
+            </div>
+          )}
+
+          {mobileTradingOpen && (
+            <TradingBottomSheet
+              isOpen={mobileTradingOpen}
+              onClose={() => setMobileTradingOpen(false)}
+              underlying_symbol={selectedSymbol}
+              onTrade={send}
+              proposals={proposals}
+              subscribeProposal={subscribeProposal}
+              clearProposals={clearProposals}
+              clearError={clearError}
+              isTrading={isTrading}
+              balance={account?.balance || 0}
+              error={error}
+              isAuthenticated={!!account}
+              onLogin={login}
+              onShowLoginModal={() => setShowLoginModal(true)}
+              barrier={userBarrier}
+              onBarrierChange={setUserBarrier}
+              lastPrice={lastTick?.underlying_symbol === selectedSymbol ? lastTick?.quote : 0}
+              tradeType={tradeType}
+              onTradeTypeChange={setTradeType}
+              proposalTrigger={proposalTrigger}
+              currency={account?.currency}
+              isConnected={isConnected}
+            />
+          )}
+
+          {mobileIndicatorsOpen && (
+            <IndicatorBottomSheet
+              isOpen={mobileIndicatorsOpen}
+              onClose={() => setMobileIndicatorsOpen(false)}
+            />
+          )}
+
+          {mobileDrawingsOpen && (
+            <DrawingBottomSheet
+              isOpen={mobileDrawingsOpen}
+              onClose={() => setMobileDrawingsOpen(false)}
+              drawingMode={drawingMode}
+              setDrawingMode={setDrawingMode}
+            />
+          )}
+
+          {mobileSettingsOpen && (
+            <ChartSettingsSheet
+              isOpen={mobileSettingsOpen}
+              onClose={() => setMobileSettingsOpen(false)}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Overlay notifications/modals */}
+        <AnimatePresence>
+          {customAlert && (
+            <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[99999] flex items-center justify-center p-6">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-[#141922] border border-white/10 p-6 rounded-3xl max-w-xs w-full text-center space-y-4 shadow-2xl"
+              >
+                <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center mx-auto">
+                  <ShieldAlert className="w-6 h-6 text-red-500" />
+                </div>
+                <h3 className="text-md font-black uppercase tracking-tight">System Message</h3>
+                <p className="text-xs font-bold text-gray-400 uppercase leading-relaxed">{customAlert}</p>
+                <button 
+                  onClick={() => setCustomAlert(null)}
+                  className="w-full py-3 bg-red-600 rounded-xl font-black text-xs uppercase"
+                >
+                  Confirm
+                </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Accounts menu slide sheet */}
+        {showAccountMenu && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-end" onClick={() => setShowAccountMenu(false)}>
+            <motion.div 
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="w-full bg-[#141922] rounded-t-[2.5rem] p-6 flex flex-col border border-white/10 max-h-[85vh] z-[120]" 
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto mb-6 flex-shrink-0" />
+              
+              <div className="flex items-center justify-between mb-6 flex-shrink-0">
+                <div>
+                  <h3 className="text-lg font-black italic uppercase">Account Settings</h3>
+                  {account?.email && (
+                    <p className="text-xs text-gray-400 mt-1 lowercase">{account.email}</p>
+                  )}
+                </div>
+                <button onClick={() => setShowAccountMenu(false)} className="p-2 bg-white/5 rounded-full hover:bg-white/10">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4 overflow-y-auto flex-1 pb-4">
+                {account && (
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-red-600/10 flex items-center justify-center text-red-500 font-black">
+                      {account.email ? account.email.charAt(0).toUpperCase() : <User className="w-5 h-5" />}
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[9px] font-black text-gray-500 uppercase">Logged in as</p>
+                      <p className="text-sm font-black text-white">{account.loginid || 'Trader'}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Account selections inside menu */}
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black text-gray-500 uppercase px-1">Available Accounts</p>
+                  {(() => {
+                    let accounts = JSON.parse(localStorage.getItem('deriv_accounts') || '[]');
+                    if (!accounts || accounts.length === 0) {
+                      accounts = availableAccounts.map(a => ({
+                        id: a.loginid,
+                        currency: a.currency,
+                        is_virtual: a.is_virtual
+                      }));
+                    }
+                    return accounts.map((acc: any) => {
+                      const liveAcc = availableAccounts.find((a: any) => a.loginid === acc.id);
+                      return (
+                        <button 
+                          key={acc.id}
+                          onClick={() => {
+                            switchAccount(acc.id);
+                            setShowAccountMenu(false);
+                          }}
+                          className={`w-full p-3 rounded-2xl border flex items-center justify-between transition-all ${account?.loginid === acc.id ? 'bg-red-600/15 border-red-600/50' : 'bg-white/5 border-white/10'}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${acc.id.startsWith('VR') ? 'bg-yellow-500/10 text-yellow-500' : 'bg-green-500/10 text-green-500'}`}>
+                              <ShieldCheck className="w-4 h-4" />
+                            </div>
+                            <div className="text-left">
+                              <p className="text-xs font-black text-white">{acc.id}</p>
+                              <p className="text-[8px] font-bold text-gray-500 uppercase">{acc.id.startsWith('VR') ? 'Demo' : 'Real'}</p>
+                            </div>
+                          </div>
+                          <p className="text-xs font-mono font-black">{liveAcc?.balance || '0.00'} {acc.currency}</p>
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
+
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between">
+                  <p className="text-xs font-black text-white">App Theme</p>
+                  <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 bg-white/5 rounded-full">
+                    {theme === 'dark' ? <Sun className="w-4 h-4 text-yellow-500" /> : <Moon className="w-4 h-4 text-gray-400" />}
+                  </button>
+                </div>
+                
+                {account && (
+                  <button onClick={logout} className="w-full py-3.5 bg-red-600/10 border border-red-600/20 text-red-500 rounded-2xl font-black text-xs uppercase flex items-center justify-center gap-2">
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                )}
+              </div>
+            </motion.div>
           </div>
         )}
-      </main>
 
-      <Navigation currentView={currentView} onViewChange={setCurrentView} />
+        {showLoginModal && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[200] flex items-center justify-center p-6">
+            <div className="bg-[#141922] rounded-[2rem] p-6 w-full max-w-sm border border-white/10 text-center space-y-4">
+              <div className="w-12 h-12 bg-red-600/10 rounded-full flex items-center justify-center mx-auto">
+                <User className="w-6 h-6 text-red-500" />
+              </div>
+              <h3 className="text-md font-black uppercase">Sign In</h3>
+              <p className="text-xs font-bold text-gray-400 uppercase leading-normal">Connect your Deriv options account securely to proceed.</p>
+              <div className="space-y-2 pt-2">
+                <button onClick={login} className="w-full py-3.5 bg-red-600 rounded-2xl font-black text-xs uppercase">Connect Account</button>
+                <button onClick={() => setShowLoginModal(false)} className="w-full py-3 bg-white/5 rounded-2xl font-black text-xs uppercase">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-[#05070c] text-white overflow-hidden font-sans">
+      {/* Premium Collapsible Sidebar (Desktop Only) */}
+      <Sidebar 
+        currentView={currentView} 
+        onViewChange={setCurrentView} 
+        isAuthenticated={!!account} 
+        onLogout={logout} 
+        theme={theme} 
+        onThemeToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        username={account?.loginid || 'Trader'}
+      />
+
+      {/* Main Terminal Frame */}
+      <div className="flex-1 flex flex-col min-w-0 h-full relative overflow-hidden bg-[#05070c]">
+        <header className="min-h-[3.5rem] pt-[env(safe-area-inset-top)] bg-[#0c0f17] border-b border-white/5 px-6 flex items-center justify-between z-40 flex-shrink-0 shadow-lg">
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.25em] text-red-500 bg-red-500/10 px-2 py-0.5 rounded-md border border-red-500/20">LIVE</span>
+              <h1 className="text-sm font-extrabold tracking-tight text-white leading-none">BYNEX SECURE SHELL</h1>
+            </div>
+            <div className="flex items-center gap-1.5 mt-1">
+              <div className={`w-1.5 h-1.5 rounded-full ${
+                isConnected ? 'bg-green-500 animate-pulse' : 
+                isReconnecting ? 'bg-yellow-500 animate-bounce' : 
+                'bg-red-500'
+              }`} />
+              <span className="text-[8.5px] font-bold text-gray-500 uppercase tracking-wider">
+                {isConnected ? 'Master Terminal Stream Connected' : isReconnecting ? 'Reconnecting Stream...' : 'Offline Mode'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {!account && (
+              <button 
+                onClick={() => setShowLoginModal(true)}
+                className="hidden sm:inline-flex px-4.5 py-2 bg-red-600 rounded-xl text-[10.5px] font-black uppercase tracking-wider shadow-lg shadow-red-600/15 hover:bg-red-500 transition-all hover:scale-102 active:scale-98"
+              >
+                Sign In To Deriv
+              </button>
+            )}
+            <div onClick={() => setShowAccountMenu(true)} className="flex items-center gap-3 cursor-pointer group bg-white/[0.02] hover:bg-white/[0.04] px-3.5 py-1.5 rounded-xl border border-white/5 hover:border-red-500/20 transition-all shadow-inner">
+              <div className="flex flex-col items-end">
+                <span className="text-xs font-mono font-extrabold tabular-nums group-hover:text-red-500 transition-colors">
+                  {account ? `${Number(account.balance).toFixed(getCurrencyConfig(account.currency).decimals)} ${account.currency}` : '0.00 USD'}
+                </span>
+                <span className="text-[7.5px] font-black text-gray-400 uppercase tracking-wider leading-none mt-0.5">
+                  {account ? (account.is_virtual ? 'Virtual Wallet' : 'Real Wallet') : 'Guest Mode'}
+                </span>
+              </div>
+              <ChevronDown className="w-3.5 h-3.5 text-gray-400 group-hover:text-white transition-colors" />
+            </div>
+            <button onClick={() => setShowAccountMenu(true)} className="w-10 h-10 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-center hover:border-red-500/30 hover:bg-white/[0.05] transition-all shadow-inner">
+              <User className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
+        </header>
+
+        <main className={`flex-1 relative ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-20'}`}>
+          {renderContent()}
+          {currentView !== AppView.TRADE && (
+            <div className="py-8 text-center opacity-40">
+              <p className="text-[9px] font-black uppercase tracking-[0.25em] text-white/40">Powered by Deriv Secure Websocket Integration</p>
+              <p className="text-[8px] font-bold uppercase tracking-widest mt-1 text-white/30">Secure Financial Stream • 18+ • Responsible Trading</p>
+            </div>
+          )}
+        </main>
+      </div>
 
       <AnimatePresence>
         {customAlert && (
@@ -1807,6 +2220,8 @@ const App: React.FC = () => {
               key="market-selector"
               markets={markets} 
               selectedSymbol={selectedSymbol} 
+              favoriteSymbols={favoriteSymbols}
+              onToggleFavorite={toggleFavorite}
               onSelect={setSelectedSymbol} 
               onClose={() => setShowMarketSelector(false)} 
             />

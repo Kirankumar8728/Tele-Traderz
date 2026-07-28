@@ -11,35 +11,35 @@ export interface DerivAuthState {
   expiresAt: number | null;
 }
 
+import { sha256 } from 'js-sha256';
+
 // Generate PKCE code verifier and challenge
+const getRandomValues = (array: Uint8Array): Uint8Array => {
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+    return window.crypto.getRandomValues(array);
+  }
+  for (let i = 0; i < array.length; i++) {
+    array[i] = Math.floor(Math.random() * 256);
+  }
+  return array;
+};
+
 const generateRandomString = (length: number) => {
   const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
   let randomString = '';
-  const randomValues = new Uint8Array(length);
-  window.crypto.getRandomValues(randomValues);
+  const randomValues = getRandomValues(new Uint8Array(length));
   for (let i = 0; i < length; i++) {
     randomString += charset[randomValues[i] % charset.length];
   }
   return randomString;
 };
 
-const base64UrlEncode = (buffer: ArrayBuffer) => {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary)
+const generateCodeChallenge = async (verifier: string) => {
+  const hash = (sha256 as any).array(verifier);
+  return btoa(String.fromCharCode(...hash))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');
-};
-
-const generateCodeChallenge = async (verifier: string) => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
-  const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
-  return base64UrlEncode(hashBuffer);
 };
 // -- Resilient Storage Configuration & Helpers --
 interface StoredItem {

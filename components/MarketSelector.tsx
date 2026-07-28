@@ -8,11 +8,27 @@ interface MarketSelectorProps {
   selectedSymbol: string;
   onSelect: (symbol: string) => void;
   onClose: () => void;
+  favoriteSymbols?: string[];
+  onToggleFavorite?: (symbol: string) => void;
 }
 
-const MarketSelector: React.FC<MarketSelectorProps> = ({ markets, selectedSymbol, onSelect, onClose }) => {
+const MarketSelector: React.FC<MarketSelectorProps> = ({ 
+  markets, 
+  selectedSymbol, 
+  onSelect, 
+  onClose,
+  favoriteSymbols = [],
+  onToggleFavorite
+}) => {
   const [search, setSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [activeCategory, setActiveCategory] = useState<string>('favorites');
+
+  // Set initial category to 'all' if no favorites yet, so they see assets instantly
+  useEffect(() => {
+    if (favoriteSymbols.length === 0 && activeCategory === 'favorites') {
+      setActiveCategory('all');
+    }
+  }, [favoriteSymbols]);
 
   // Extract unique categories and sort them
   const categories = useMemo(() => {
@@ -37,7 +53,11 @@ const MarketSelector: React.FC<MarketSelectorProps> = ({ markets, selectedSymbol
       return a.name.localeCompare(b.name);
     });
 
-    return [{ id: 'all', name: 'All Markets' }, ...cats];
+    return [
+      { id: 'favorites', name: 'Favorites' },
+      { id: 'all', name: 'All Markets' }, 
+      ...cats
+    ];
   }, [markets]);
 
   // Filter markets based on search and category
@@ -49,7 +69,14 @@ const MarketSelector: React.FC<MarketSelectorProps> = ({ markets, selectedSymbol
         name.toLowerCase().includes(search.toLowerCase()) ||
         symbol.toLowerCase().includes(search.toLowerCase());
       
-      const matchesCategory = activeCategory === 'all' || m.market === activeCategory;
+      let matchesCategory = false;
+      if (activeCategory === 'all') {
+        matchesCategory = true;
+      } else if (activeCategory === 'favorites') {
+        matchesCategory = favoriteSymbols.includes(m.underlying_symbol);
+      } else {
+        matchesCategory = m.market === activeCategory;
+      }
       
       return matchesSearch && matchesCategory;
     });
@@ -66,7 +93,7 @@ const MarketSelector: React.FC<MarketSelectorProps> = ({ markets, selectedSymbol
       
       return (a.underlying_symbol_name || '').localeCompare(b.underlying_symbol_name || '');
     });
-  }, [markets, search, activeCategory]);
+  }, [markets, search, activeCategory, favoriteSymbols]);
 
   const getCategoryIcon = (cat: string) => {
     switch (cat.toLowerCase()) {
@@ -177,13 +204,22 @@ const MarketSelector: React.FC<MarketSelectorProps> = ({ markets, selectedSymbol
                   <div className="flex-1 h-px bg-white/5 ml-2" />
                 </div>
                 {marketsInCategory.map((m, idx) => (
-                  <motion.button
+                  <motion.div
                     layout
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     key={m.underlying_symbol || `market-${idx}`}
                     onClick={() => { onSelect(m.underlying_symbol); onClose(); }}
-                    className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all border group ${
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelect(m.underlying_symbol);
+                        onClose();
+                      }
+                    }}
+                    className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all border group cursor-pointer ${
                       selectedSymbol === m.underlying_symbol 
                         ? 'bg-red-600/10 border-red-500/30 text-white' 
                         : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.07] hover:border-white/10 text-gray-300'
@@ -227,14 +263,28 @@ const MarketSelector: React.FC<MarketSelectorProps> = ({ markets, selectedSymbol
                         </div>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <div className="flex items-center gap-2">
-                        <ChevronRight className={`w-4 h-4 transition-transform group-hover:translate-x-1 ${
-                          selectedSymbol === m.underlying_symbol ? 'text-red-500' : 'text-gray-700'
-                        }`} />
-                      </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onToggleFavorite) onToggleFavorite(m.underlying_symbol);
+                        }}
+                        className="p-2.5 hover:bg-white/10 rounded-xl transition-colors z-20"
+                        aria-label={favoriteSymbols.includes(m.underlying_symbol) ? "Unfavorite" : "Favorite"}
+                      >
+                        <Star 
+                          className={`w-4 h-4 transition-transform hover:scale-110 active:scale-95 ${
+                            favoriteSymbols.includes(m.underlying_symbol) 
+                              ? 'text-yellow-500 fill-yellow-500' 
+                              : 'text-gray-500 hover:text-gray-300'
+                          }`} 
+                        />
+                      </button>
+                      <ChevronRight className={`w-4 h-4 transition-transform group-hover:translate-x-1 ${
+                        selectedSymbol === m.underlying_symbol ? 'text-red-500' : 'text-gray-700'
+                      }`} />
                     </div>
-                  </motion.button>
+                  </motion.div>
                 ))}
               </div>
           ))

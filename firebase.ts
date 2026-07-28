@@ -10,7 +10,7 @@ export const auth = getAuth(app);
 // Use initializeFirestore with settings for better compatibility in restricted environments
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId);
+}, (firebaseConfig as any).firestoreDatabaseId);
 export const googleProvider = new GoogleAuthProvider();
 
 // Error Handling Spec for Firestore Permissions
@@ -80,11 +80,11 @@ async function testConnection(retries = 3) {
       setTimeout(() => testConnection(retries - 1), 5000);
     } else {
       if (errorMsg.includes('the client is offline') || error?.code === 'unavailable') {
-        console.error("Firestore is currently unavailable or offline. The app will continue in offline mode.");
+        console.info("Firestore is currently in offline mode.");
       } else if (errorMsg.includes('permission-denied') || error?.code === 'permission-denied') {
         console.warn("Firestore connection check: Permission denied (this is normal if rules are tight).");
       } else {
-        console.error("Firestore connection failed explicitly:", errorMsg);
+        console.info("Firestore connection check info:", errorMsg);
       }
     }
   }

@@ -16,7 +16,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           'vendor-react': ['react', 'react-dom'],
-          'vendor-charts': ['lightweight-charts', 'klinecharts'],
+          'vendor-charts': ['klinecharts'],
           'vendor-ui': ['lucide-react', 'framer-motion', 'clsx', 'tailwind-merge'],
           'vendor-firebase': ['firebase/app', 'firebase/firestore', 'firebase/auth']
         }
