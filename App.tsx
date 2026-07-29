@@ -1911,7 +1911,7 @@ const App: React.FC = () => {
         <main className={`flex-1 relative min-h-0 w-full ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-6'}`}>
           {currentView === AppView.TRADE ? (
             <div className="flex-1 flex flex-col min-h-0 w-full overflow-hidden bg-[#07090e]">
-              <div className="flex-1 min-h-[140px] relative flex flex-col overflow-hidden">
+              <div className="flex-1 min-h-[100px] relative flex flex-col overflow-hidden">
                 <MobileChart
                   timeframe={timeframe}
                   onTimeframeChange={setTimeframe}
@@ -1948,7 +1948,7 @@ const App: React.FC = () => {
               </div>
 
               {/* Compact Trade Execution Panel directly above footer */}
-              <div className="bg-[#0c0f17] border-t border-white/10 pt-2 px-2.5 pb-2.5 flex-shrink-0 max-h-[48vh] overflow-y-auto no-scrollbar">
+              <div className="bg-[#0c0f17] border-t border-white/10 p-2 flex-shrink-0 z-20 overflow-y-auto max-h-[50vh] no-scrollbar">
                 <TradeForm 
                   underlying_symbol={selectedSymbol}
                   onTrade={send}
