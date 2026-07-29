@@ -1897,7 +1897,7 @@ const App: React.FC = () => {
 
   if (isMobile) {
     return (
-      <div className="flex flex-col h-screen bg-[#07090e] text-white overflow-hidden font-sans select-none pb-[env(safe-area-inset-bottom,0px)]">
+      <div className="flex flex-col h-screen h-[100dvh] w-full bg-[#07090e] text-white overflow-hidden font-sans select-none pb-[calc(56px+env(safe-area-inset-bottom,12px))]">
         {/* Mobile Header with Market & Profile toggles */}
         <MobileHeader
           account={account}
@@ -1908,10 +1908,10 @@ const App: React.FC = () => {
         />
 
         {/* Scrollable / Flexible content view */}
-        <main className={`flex-1 relative min-h-0 ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-[130px]'}`}>
+        <main className={`flex-1 relative min-h-0 w-full ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-6'}`}>
           {currentView === AppView.TRADE ? (
             <div className="flex-1 flex flex-col min-h-0 w-full overflow-hidden bg-[#07090e]">
-              <div className="flex-1 min-h-0 relative flex flex-col">
+              <div className="flex-1 min-h-[140px] relative flex flex-col overflow-hidden">
                 <MobileChart
                   timeframe={timeframe}
                   onTimeframeChange={setTimeframe}
@@ -1947,8 +1947,8 @@ const App: React.FC = () => {
                 </MobileChart>
               </div>
 
-              {/* Compact Trade Execution Panel directly below the chart area */}
-              <div className="bg-[#0c0f17] border-t border-white/5 pt-2 px-3 flex-shrink-0 max-h-[46vh] overflow-y-auto no-scrollbar mb-[calc(56px+env(safe-area-inset-bottom,12px))] pb-6">
+              {/* Compact Trade Execution Panel directly above footer */}
+              <div className="bg-[#0c0f17] border-t border-white/10 pt-2 px-2.5 pb-2.5 flex-shrink-0 max-h-[48vh] overflow-y-auto no-scrollbar">
                 <TradeForm 
                   underlying_symbol={selectedSymbol}
                   onTrade={send}
