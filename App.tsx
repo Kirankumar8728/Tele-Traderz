@@ -1897,7 +1897,10 @@ const App: React.FC = () => {
 
   if (isMobile) {
     return (
-      <div className="flex flex-col h-screen h-[100dvh] w-full bg-[#07090e] text-white overflow-hidden font-sans select-none pb-[calc(56px+env(safe-area-inset-bottom,12px))]">
+      <div 
+        className="flex flex-col h-screen h-[100dvh] w-full bg-[#07090e] text-white overflow-hidden font-sans select-none safe-bottom-padding"
+        style={{ paddingBottom: 'var(--total-bottom-offset)' }}
+      >
         {/* Mobile Header with Market & Profile toggles */}
         <MobileHeader
           account={account}
@@ -1908,7 +1911,7 @@ const App: React.FC = () => {
         />
 
         {/* Scrollable / Flexible content view */}
-        <main className={`flex-1 relative min-h-0 w-full ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-6'}`}>
+        <main className={`flex-1 relative min-h-0 w-full ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-12'}`}>
           {currentView === AppView.TRADE ? (
             <div className="flex-1 flex flex-col min-h-0 w-full overflow-hidden bg-[#07090e]">
               <div className="flex-1 min-h-[100px] relative flex flex-col overflow-hidden">
@@ -2005,6 +2008,7 @@ const App: React.FC = () => {
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 220 }}
                 className="w-full max-w-md bg-[#141922] border-t border-white/10 rounded-t-[2rem] max-h-[85vh] overflow-y-auto z-[160] shadow-2xl"
+                style={{ paddingBottom: 'calc(var(--safe-bottom) + 20px)' }}
               >
                 <div className="w-12 h-1.5 bg-white/15 rounded-full mx-auto my-3" />
                 <MarketSelector 

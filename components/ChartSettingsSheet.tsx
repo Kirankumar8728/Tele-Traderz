@@ -61,7 +61,8 @@ export const ChartSettingsSheet: React.FC<ChartSettingsSheetProps> = ({ isOpen, 
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-          className="w-full max-w-md bg-[#141922] border-t border-white/10 rounded-t-[2rem] p-6 pb-[env(safe-area-inset-bottom,24px)] max-h-[85vh] flex flex-col z-[160] shadow-[0_-8px_32px_rgba(0,0,0,0.5)]"
+          className="w-full max-w-md bg-[#141922] border-t border-white/10 rounded-t-[2rem] p-6 max-h-[85vh] flex flex-col z-[160] shadow-[0_-8px_32px_rgba(0,0,0,0.5)]"
+          style={{ paddingBottom: 'calc(var(--safe-bottom) + 24px)' }}
         >
           {/* Draggable drag indicator handle */}
           <div className="w-12 h-1.5 bg-white/15 rounded-full mx-auto mb-5 cursor-grab active:cursor-grabbing flex-shrink-0" />

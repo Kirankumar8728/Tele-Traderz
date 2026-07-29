@@ -17,7 +17,13 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onViewChange }) =>
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-[#141922]/98 backdrop-blur-md border-t border-white/10 px-2 py-2 flex flex-col items-center z-50 pb-[env(safe-area-inset-bottom,12px)] h-[calc(56px+env(safe-area-inset-bottom,12px))]">
+    <nav 
+      className="fixed bottom-0 left-0 right-0 bg-[#141922]/98 backdrop-blur-md border-t border-white/10 px-2 py-2 flex flex-col items-center z-50 safe-bottom-nav"
+      style={{
+        height: 'var(--total-bottom-offset)',
+        paddingBottom: 'var(--safe-bottom)'
+      }}
+    >
       <div className="flex justify-around items-center w-full">
         {navItems.map((item) => (
           <button

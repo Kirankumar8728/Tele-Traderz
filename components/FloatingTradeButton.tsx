@@ -8,7 +8,10 @@ interface FloatingTradeButtonProps {
 
 export const FloatingTradeButton: React.FC<FloatingTradeButtonProps> = ({ onClick, lastPrice }) => {
   return (
-    <div className="fixed bottom-[68px] left-0 right-0 px-4 z-[80] pointer-events-none select-none">
+    <div 
+      className="fixed left-0 right-0 px-4 z-[100] pointer-events-none select-none safe-floating-button"
+      style={{ bottom: 'var(--floating-button-bottom)' }}
+    >
       <button
         onClick={onClick}
         className="pointer-events-auto w-full max-w-sm mx-auto h-13 bg-gradient-to-r from-red-600 to-red-500 active:scale-95 transition-all text-white rounded-2xl flex items-center justify-between px-5 border border-red-500/10 shadow-[0_8px_24px_rgba(239,68,68,0.25)]"
