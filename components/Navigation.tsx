@@ -18,7 +18,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onViewChange }) =>
 
   return (
     <nav 
-      className="w-full bg-[#141922]/98 backdrop-blur-md border-t border-white/10 px-2 py-2 flex flex-col items-center z-50 flex-shrink-0"
+      className="fixed bottom-0 left-0 right-0 bg-[#141922]/98 backdrop-blur-md border-t border-white/10 px-2 py-2 flex flex-col items-center z-50 safe-bottom-nav"
       style={{
         height: 'var(--total-bottom-offset)',
         paddingBottom: 'var(--safe-bottom)'
