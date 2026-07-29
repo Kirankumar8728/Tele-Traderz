@@ -1953,7 +1953,7 @@ const App: React.FC = () => {
               </div>
 
               {/* Compact Trade Execution Panel directly above footer with ample gap */}
-              <div className="bg-[#0c0f17] border-t border-white/10 p-3 pb-12 mb-4 flex-shrink-0 z-20 overflow-y-auto max-h-[55vh] no-scrollbar">
+              <div className="bg-[#0c0f17] border-t border-white/10 p-3 pb-24 mb-10 flex-shrink-0 z-20 overflow-y-auto max-h-[55vh] no-scrollbar">
                 <TradeForm 
                   underlying_symbol={selectedSymbol}
                   onTrade={send}
