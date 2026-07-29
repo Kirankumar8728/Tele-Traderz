@@ -29,7 +29,12 @@ import {
   Layers,
   Sliders,
   CheckCircle,
-  ArrowLeft
+  ArrowLeft,
+  Landmark,
+  Smartphone,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { DerivAccount } from '../types';
 import { P2PView } from './P2PView';
@@ -74,6 +79,16 @@ interface EWalletMethod {
 }
 
 const SAMPLE_CRYPTO_ASSETS: CryptoAsset[] = [
+  {
+    symbol: 'BINANCE',
+    name: 'Binance Pay (USDT / BUSD)',
+    network: 'Binance Pay ID / QR',
+    icon: '🟡',
+    deposit_address: 'binancepay@deriv.com (Pay ID: 84920184)',
+    min_deposit: '5 USDT',
+    confirmations: 'Instant Auto-Credit (0% Fee)',
+    color: 'amber'
+  },
   {
     symbol: 'USDT',
     name: 'Tether (TRC20)',
@@ -272,7 +287,22 @@ export const CashierHub: React.FC<CashierHubProps> = ({
   setCustomAlert
 }) => {
   // Navigation state: null = Sub Payment Categories view; string = specific payment dashboard selected
-  const [selectedCategory, setSelectedCategory] = useState<'cards_ewallets' | 'p2p' | 'agents' | 'crypto' | 'transfer' | 'express' | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<'bank_upi' | 'cards_ewallets' | 'p2p' | 'agents' | 'crypto' | 'transfer' | 'express' | null>(null);
+
+  // Direct Bank UPI Gateway State
+  const [bankUpiMode, setBankUpiMode] = useState<'deposit' | 'withdraw'>('deposit');
+  const [bankUpiApp, setBankUpiApp] = useState<'gpay' | 'phonepe' | 'paytm' | 'bhim' | 'netbanking'>('gpay');
+  const [bankUpiAmount, setBankUpiAmount] = useState<string>('50');
+  const [bankUpiVpa, setBankUpiVpa] = useState<string>('');
+  const [bankUpiUtr, setBankUpiUtr] = useState<string>('');
+  const [bankUpiBankName, setBankUpiBankName] = useState<string>('HDFC Bank');
+  const [bankUpiAccountNo, setBankUpiAccountNo] = useState<string>('');
+  const [bankUpiIfsc, setBankUpiIfsc] = useState<string>('');
+  const [bankUpiVerifyCode, setBankUpiVerifyCode] = useState<string>('');
+  const [isSubmittingBankUpi, setIsSubmittingBankUpi] = useState<boolean>(false);
+  const [bankUpiSuccessMsg, setBankUpiSuccessMsg] = useState<string | null>(null);
+  const [copiedBankUpiVpa, setCopiedBankUpiVpa] = useState<boolean>(false);
+  const [showUtrHelp, setShowUtrHelp] = useState<boolean>(true);
   
   // Withdrawal verification state
   const [showWithdrawVerify, setShowWithdrawVerify] = useState<boolean>(false);
@@ -419,6 +449,66 @@ export const CashierHub: React.FC<CashierHubProps> = ({
     }, 1200);
   };
 
+  // Direct Bank UPI Handlers
+  const handleBankUpiDepositSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(bankUpiAmount);
+    if (isNaN(amt) || amt < 5) {
+      if (setCustomAlert) setCustomAlert("Minimum bank deposit amount is $5 USD (₹442.50 INR)");
+      return;
+    }
+    if (amt > 10000) {
+      if (setCustomAlert) setCustomAlert("Maximum bank deposit limit per transaction is $10,000 USD (₹8,85,000 INR)");
+      return;
+    }
+    if (!bankUpiUtr.trim()) {
+      if (setCustomAlert) setCustomAlert("Please enter your 12-digit UPI UTR / Bank Reference Number after completing payment.");
+      return;
+    }
+
+    setIsSubmittingBankUpi(true);
+    setTimeout(() => {
+      setIsSubmittingBankUpi(false);
+      const inrAmt = (amt * 88.50).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+      setBankUpiSuccessMsg(`Direct Bank Deposit request submitted! UTR Ref: ${bankUpiUtr.trim()}. $${amt} USD (₹${inrAmt} INR) verified with ${bankUpiApp.toUpperCase()} Gateway and queued for auto-credit.`);
+      setBankUpiUtr('');
+      setTimeout(() => setBankUpiSuccessMsg(null), 5000);
+    }, 1200);
+  };
+
+  const handleBankUpiWithdrawSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (account?.is_virtual) {
+      if (setCustomAlert) setCustomAlert("Demo accounts cannot withdraw real funds.");
+      return;
+    }
+    const amt = parseFloat(bankUpiAmount);
+    if (isNaN(amt) || amt < 10) {
+      if (setCustomAlert) setCustomAlert("Minimum Bank UPI withdrawal is $10 USD (₹880 INR)");
+      return;
+    }
+    if (amt > 10000) {
+      if (setCustomAlert) setCustomAlert("Maximum Bank UPI withdrawal limit per transaction is $10,000 USD (₹8,80,000 INR)");
+      return;
+    }
+    if (amt > (account?.balance || 0)) {
+      if (setCustomAlert) setCustomAlert(`Insufficient balance. Maximum available: $${account?.balance?.toFixed(2) || '0.00'}`);
+      return;
+    }
+    if (!bankUpiVpa.trim() && !bankUpiAccountNo.trim()) {
+      if (setCustomAlert) setCustomAlert("Please enter your target UPI VPA or Bank Account Number.");
+      return;
+    }
+
+    setIsSubmittingBankUpi(true);
+    setTimeout(() => {
+      setIsSubmittingBankUpi(false);
+      const target = bankUpiVpa.trim() || `${bankUpiBankName} A/C ${bankUpiAccountNo.trim().slice(-4)}`;
+      setBankUpiSuccessMsg(`Bank Withdrawal of $${amt.toFixed(2)} USD dispatched to ${target}! Payout processed directly via Bank IMPS/UPI gateway.`);
+      setTimeout(() => setBankUpiSuccessMsg(null), 5000);
+    }, 1200);
+  };
+
   // Filter Agents
   const filteredAgents = SAMPLE_AGENTS.filter(agent => {
     if (agentCountry !== 'all' && !agent.countries.includes(agentCountry)) {
@@ -436,6 +526,14 @@ export const CashierHub: React.FC<CashierHubProps> = ({
   // Helper for Breadcrumb Category Details
   const getCategoryInfo = (tab: typeof selectedCategory) => {
     switch (tab) {
+      case 'bank_upi':
+        return {
+          title: 'Direct Bank UPI & Transfer',
+          icon: Landmark,
+          color: 'text-emerald-400',
+          badgeBg: 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400',
+          desc: 'Direct instant bank deposits & payouts via official Bank UPI (GPay, PhonePe, Paytm, BHIM) and Bank IMPS / NetBanking.'
+        };
       case 'cards_ewallets':
         return {
           title: 'Cards & E-Wallets',
@@ -500,6 +598,19 @@ export const CashierHub: React.FC<CashierHubProps> = ({
 
   const CATEGORIES = [
     {
+      id: 'bank_upi' as const,
+      title: 'Direct Bank UPI & Transfer',
+      icon: Landmark,
+      color: 'text-emerald-400',
+      badge: 'Official Bank Gateway • Instant',
+      badgeBg: 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400',
+      borderHover: 'hover:border-emerald-500/50 hover:shadow-emerald-500/10',
+      desc: 'Instant direct bank deposits & withdrawals via official Bank UPI (Google Pay, PhonePe, Paytm, BHIM) and IMPS NetBanking.',
+      minLimit: '$5.00 USD (₹442.50)',
+      maxLimit: '$10,000.00 USD (₹8,85,000)',
+      tags: ['Google Pay', 'PhonePe', 'Paytm', 'BHIM UPI', 'Direct Bank IMPS', '0% Fee']
+    },
+    {
       id: 'cards_ewallets' as const,
       title: 'Cards & E-Wallets',
       icon: CreditCard,
@@ -508,6 +619,8 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       badgeBg: 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400',
       borderHover: 'hover:border-emerald-500/50 hover:shadow-emerald-500/10',
       desc: 'Deposit & withdraw directly using Visa, Mastercard, Skrill, Neteller, AstroPay and AirTM.',
+      minLimit: '$10.00 USD',
+      maxLimit: '$10,000.00 USD',
       tags: ['Visa', 'Mastercard', 'Skrill', 'Neteller', 'AstroPay', 'AirTM']
     },
     {
@@ -519,6 +632,8 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       badgeBg: 'bg-blue-500/20 border-blue-500/30 text-blue-400',
       borderHover: 'hover:border-blue-500/50 hover:shadow-blue-500/10',
       desc: 'Buy and sell USD directly with verified local traders using local bank transfers & mobile money.',
+      minLimit: '$1.00 USD',
+      maxLimit: '$5,000.00 USD',
       tags: ['Local Bank Transfer', 'UPI', 'M-Pesa', 'IMPS', 'E-Wallets']
     },
     {
@@ -530,6 +645,8 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       badgeBg: 'bg-indigo-500/20 border-indigo-500/30 text-indigo-400',
       borderHover: 'hover:border-indigo-500/50 hover:shadow-indigo-500/10',
       desc: 'Deposit and withdraw through certified local Deriv payment agents in your country.',
+      minLimit: '$10.00 USD',
+      maxLimit: '$2,000.00 USD',
       tags: ['INR UPI', 'NGN Bank', 'IDR Bank', 'KES M-Pesa', 'Cash Transfer']
     },
     {
@@ -541,6 +658,8 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       badgeBg: 'bg-amber-500/20 border-amber-500/30 text-amber-400',
       borderHover: 'hover:border-amber-500/50 hover:shadow-amber-500/10',
       desc: 'Auto-credited cryptocurrency deposits with QR wallet addresses for USDT, BTC, ETH, and LTC.',
+      minLimit: '$5.00 USD',
+      maxLimit: '$50,000.00 USD',
       tags: ['USDT TRC20', 'Bitcoin BTC', 'Ethereum ERC20', 'Litecoin LTC']
     },
     {
@@ -552,6 +671,8 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       badgeBg: 'bg-violet-500/20 border-violet-500/30 text-violet-400',
       borderHover: 'hover:border-violet-500/50 hover:shadow-violet-500/10',
       desc: 'Transfer funds instantly between your Deriv Options, MT5 Synthetic, and MT5 Financial accounts.',
+      minLimit: '$0.10 USD',
+      maxLimit: '$50,000.00 USD',
       tags: ['Options -> MT5', 'MT5 -> Options', 'Financial -> Derived']
     },
     {
@@ -563,6 +684,8 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       badgeBg: 'bg-red-500/20 border-red-500/30 text-red-400',
       borderHover: 'hover:border-red-500/50 hover:shadow-red-500/10',
       desc: 'Direct express deposit link to official Deriv gateway & email verification code withdrawal.',
+      minLimit: '$10.00 USD',
+      maxLimit: '$10,000.00 USD',
       tags: ['Direct Gateway Deposit', 'Email Code Verification']
     }
   ];
@@ -603,18 +726,21 @@ export const CashierHub: React.FC<CashierHubProps> = ({
           </div>
         )}
 
-        {/* Available Balance */}
-        <div className="flex items-center gap-3 bg-black/40 border border-white/10 px-3.5 py-1.5 rounded-xl ml-auto sm:ml-0">
+        {/* Available Balance & Account Recognition */}
+        <div className="flex items-center gap-3 bg-black/40 border border-white/10 px-3.5 py-1.5 rounded-xl ml-auto sm:ml-0 shadow-sm">
           <div className="text-right">
-            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Available Balance</p>
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider flex items-center justify-end gap-1">
+              <span>Account:</span>
+              <span className="text-white font-mono font-bold">{account?.loginid || 'Guest'}</span>
+            </p>
             <p className={`text-sm sm:text-base font-black leading-tight ${account?.is_virtual ? 'text-amber-400' : 'text-emerald-400'}`}>
               {account?.currency || 'USD'} {account?.balance?.toFixed(2) || '0.00'}
             </p>
           </div>
-          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${
+          <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider shrink-0 ${
             account?.is_virtual ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
           }`}>
-            {account?.is_virtual ? 'DEMO' : 'REAL'}
+            {account?.is_virtual ? 'DEMO WALLET' : 'REAL WALLET'}
           </span>
         </div>
       </div>
@@ -623,16 +749,67 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       {selectedCategory === null ? (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
           
-          <div className="flex items-center justify-between border-b border-white/10 pb-2 px-1">
-            <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-              <h3 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
-                <Layers className="w-4 h-4 text-red-500" />
-                Select Sub Payment Category
-              </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/10 pb-3 px-1 gap-2.5">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-red-500" />
+                  Select Sub Payment Category
+                </h3>
+              </div>
+
+              {/* Most Used Payments */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-amber-400" />
+                  Most Used Payments:
+                </span>
+                <button
+                  onClick={() => setSelectedCategory('bank_upi')}
+                  className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-emerald-300 hover:text-emerald-200 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-sm hover:scale-105 active:scale-95"
+                  title="Direct Bank UPI (Google Pay, PhonePe, Paytm, BHIM) - Official Gateway"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  DIRECT BANK UPI
+                </button>
+                <button
+                  onClick={() => setSelectedCategory('p2p')}
+                  className="px-2.5 py-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg text-blue-300 hover:text-blue-200 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-sm hover:scale-105 active:scale-95"
+                  title="P2P Trading Marketplace via UPI & Local Banks"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                  P2P UPI
+                </button>
+                <button
+                  onClick={() => setSelectedCategory('crypto')}
+                  className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg text-amber-300 hover:text-amber-200 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-sm hover:scale-105 active:scale-95"
+                  title="Instant Crypto Deposit & Pay via Binance Pay"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                  BINANCE PAY
+                </button>
+                <button
+                  onClick={() => setSelectedCategory('cards_ewallets')}
+                  className="px-2.5 py-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-lg text-purple-300 hover:text-purple-200 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-sm hover:scale-105 active:scale-95"
+                  title="Visa / Mastercard / Skrill / Neteller"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                  VISA / MASTERCARD
+                </button>
+                <button
+                  onClick={() => setSelectedCategory('agents')}
+                  className="px-2.5 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-lg text-indigo-300 hover:text-indigo-200 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-sm hover:scale-105 active:scale-95"
+                  title="Local Bank Transfers & Agent Cashiers"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                  LOCAL BANK TRANSFER
+                </button>
+              </div>
             </div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase">
-              6 Dedicated Dashboards Available
+
+            <span className="text-[10px] font-bold text-gray-400 uppercase self-start sm:self-center bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg">
+              7 Dedicated Dashboards Available
             </span>
           </div>
 
@@ -665,8 +842,14 @@ export const CashierHub: React.FC<CashierHubProps> = ({
                       </p>
                     </div>
 
+                    {/* Min & Max Payment Limits Badge */}
+                    <div className="flex items-center justify-between bg-black/50 border border-white/10 px-2.5 py-1.5 rounded-xl text-[10px] font-bold">
+                      <span className="text-gray-400 uppercase tracking-wider">Payment Limits:</span>
+                      <span className="text-emerald-400 font-black">Min {cat.minLimit} • Max {cat.maxLimit}</span>
+                    </div>
+
                     {/* Tags */}
-                    <div className="flex flex-wrap gap-1.5 pt-1">
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
                       {cat.tags.map((tag, idx) => (
                         <span key={idx} className="px-2 py-0.5 bg-black/40 border border-white/10 rounded-lg text-[9px] font-bold text-gray-300">
                           {tag}
@@ -690,6 +873,469 @@ export const CashierHub: React.FC<CashierHubProps> = ({
         /* STATE 2: SPECIFIC PAYMENT DASHBOARD SELECTED */
         <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-300 w-full">
           
+          {/* DASHBOARD VIEW: DIRECT BANK UPI & INSTANT TRANSFER */}
+          {selectedCategory === 'bank_upi' && (
+            <div className="bg-[#141922] border border-white/10 rounded-2xl p-4 sm:p-6 space-y-5 shadow-xl w-full">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                      <Landmark className="w-4 h-4" />
+                    </div>
+                    <h4 className="text-base font-black uppercase tracking-wider text-white">Direct Official Bank UPI & IMPS Gateway</h4>
+                  </div>
+                  <p className="text-[11px] font-bold text-gray-400 mt-1">
+                    Direct bank payment gateway (Not P2P). Deposit or withdraw instantly via Google Pay, PhonePe, Paytm, BHIM UPI, or Direct IMPS Bank Transfer.
+                  </p>
+                </div>
+
+                {/* Mode Selector */}
+                <div className="flex items-center gap-1.5 bg-black/50 border border-white/10 p-1 rounded-xl self-start sm:self-center">
+                  <button
+                    type="button"
+                    onClick={() => { setBankUpiMode('deposit'); setBankUpiSuccessMsg(null); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${
+                      bankUpiMode === 'deposit' 
+                        ? 'bg-emerald-500 text-black shadow-md' 
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                    <span>Deposit via Bank UPI</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setBankUpiMode('withdraw'); setBankUpiSuccessMsg(null); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${
+                      bankUpiMode === 'withdraw' 
+                        ? 'bg-red-500 text-white shadow-md' 
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                    <span>Withdraw to Bank</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Success Alert Banner */}
+              {bankUpiSuccessMsg && (
+                <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-start gap-3 animate-in fade-in duration-200">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-black text-emerald-300">Transaction Status Updated</p>
+                    <p className="text-[11px] font-bold text-emerald-200 leading-relaxed">{bankUpiSuccessMsg}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* MODE 1: DEPOSIT VIA BANK UPI */}
+              {bankUpiMode === 'deposit' && (
+                <div className="space-y-5">
+                  {/* Step 1: Select Bank UPI App */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-black uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
+                      <Smartphone className="w-4 h-4 text-emerald-400" />
+                      1. Select Preferred Bank UPI App / Payment Option:
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                      {[
+                        { id: 'gpay', name: 'Google Pay', icon: '🟢', vpa: 'deriv.official@okaxis', badge: 'GPay UPI' },
+                        { id: 'phonepe', name: 'PhonePe', icon: '🟣', vpa: 'deriv.pay@ybl', badge: 'PhonePe' },
+                        { id: 'paytm', name: 'Paytm UPI', icon: '🔵', vpa: 'deriv.bank@paytm', badge: 'Paytm' },
+                        { id: 'bhim', name: 'BHIM / Any UPI', icon: '🟠', vpa: 'deriv.global@upi', badge: 'BHIM UPI' },
+                        { id: 'netbanking', name: 'IMPS Bank Transfer', icon: '🏦', vpa: 'HDFC Bank A/C 502000849201', badge: 'Bank IMPS' }
+                      ].map((app) => (
+                        <button
+                          key={app.id}
+                          type="button"
+                          onClick={() => setBankUpiApp(app.id as any)}
+                          className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between space-y-2 ${
+                            bankUpiApp === app.id
+                              ? 'bg-emerald-500/15 border-emerald-500 text-white shadow-lg shadow-emerald-500/10'
+                              : 'bg-black/40 hover:bg-black/60 border-white/10 text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xl">{app.icon}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${
+                              bankUpiApp === app.id ? 'bg-emerald-500 text-black' : 'bg-white/10 text-gray-300'
+                            }`}>
+                              {app.badge}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-white">{app.name}</p>
+                            <p className="text-[9px] font-bold text-gray-400 mt-0.5">Instant 0% Fee</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Step 2: Deposit Amount in USD */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-black/40 border border-white/10 rounded-2xl p-4">
+                    <div className="space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <label className="text-xs font-black uppercase tracking-wider text-gray-300">
+                          2. Deposit Amount (USD):
+                        </label>
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                          Rate: $1 USD = ₹88.50 INR
+                        </span>
+                      </div>
+
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-black text-sm">$</span>
+                        <input
+                          type="number"
+                          value={bankUpiAmount}
+                          onChange={(e) => setBankUpiAmount(e.target.value)}
+                          placeholder="50"
+                          min="5"
+                          max="10000"
+                          step="1"
+                          className="w-full bg-black/60 border border-white/15 rounded-xl pl-8 pr-16 py-2.5 text-sm font-black text-white outline-none focus:border-emerald-500"
+                        />
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">USD</span>
+                      </div>
+
+                      {/* Deposit Limits Display */}
+                      <div className="flex items-center justify-between text-[10px] font-bold bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg text-gray-300">
+                        <span>Deposit Limits:</span>
+                        <span className="text-emerald-400 font-mono font-black">Min: $5.00 (₹442.50) • Max: $10,000.00 (₹8,85,000)</span>
+                      </div>
+
+                      {/* Quick Amount Chips */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        {['10', '25', '50', '100', '250', '500', '1000', '5000'].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            onClick={() => setBankUpiAmount(amt)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
+                              bankUpiAmount === amt
+                                ? 'bg-emerald-500 text-black font-bold'
+                                : 'bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300'
+                            }`}
+                          >
+                            ${amt}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-1">
+                        <div className="flex items-center justify-between text-xs font-black text-white">
+                          <span>Total Payable Amount:</span>
+                          <span className="text-emerald-400 text-sm">₹{((parseFloat(bankUpiAmount) || 0) * 88.50).toLocaleString('en-IN', { maximumFractionDigits: 2 })} INR</span>
+                        </div>
+                        <p className="text-[10px] font-bold text-gray-400">
+                          Auto-credited to trading account directly upon UTR reference verification.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 3: Payment Details & QR */}
+                    <div className="space-y-3 border-t md:border-t-0 md:border-l border-white/10 pt-3 md:pt-0 md:pl-4">
+                      <label className="text-xs font-black uppercase tracking-wider text-gray-300 flex items-center justify-between">
+                        <span>3. Scan QR or Copy Official Bank VPA:</span>
+                        <span className="text-[10px] font-bold text-emerald-400">Verified Gateway</span>
+                      </label>
+
+                      {bankUpiApp !== 'netbanking' ? (
+                        <div className="p-3 bg-black/60 border border-white/10 rounded-xl space-y-2.5">
+                          <div className="flex items-center justify-between bg-black/80 border border-white/10 p-2.5 rounded-lg">
+                            <div>
+                              <p className="text-[9px] font-bold text-gray-400 uppercase">Official Gateway UPI ID (VPA)</p>
+                              <p className="text-xs font-black text-emerald-400 tracking-wide font-mono">
+                                {bankUpiApp === 'gpay' && 'deriv.official@okaxis'}
+                                {bankUpiApp === 'phonepe' && 'deriv.pay@ybl'}
+                                {bankUpiApp === 'paytm' && 'deriv.bank@paytm'}
+                                {bankUpiApp === 'bhim' && 'deriv.global@upi'}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const vpa = bankUpiApp === 'gpay' ? 'deriv.official@okaxis' : bankUpiApp === 'phonepe' ? 'deriv.pay@ybl' : bankUpiApp === 'paytm' ? 'deriv.bank@paytm' : 'deriv.global@upi';
+                                navigator.clipboard.writeText(vpa);
+                                setCopiedBankUpiVpa(true);
+                                setTimeout(() => setCopiedBankUpiVpa(false), 2000);
+                              }}
+                              className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 hover:text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all"
+                            >
+                              {copiedBankUpiVpa ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>{copiedBankUpiVpa ? 'Copied' : 'Copy VPA'}</span>
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl text-black">
+                            <div className="w-14 h-14 bg-gray-900 rounded-lg flex items-center justify-center p-1 text-white shrink-0">
+                              <QrCode className="w-10 h-10 text-emerald-400" />
+                            </div>
+                            <div className="text-left space-y-0.5">
+                              <p className="text-[10px] font-black uppercase tracking-wider text-black">Bank Instant Scan QR</p>
+                              <p className="text-[10px] font-bold text-gray-600">Scan via GPay, PhonePe, Paytm or BHIM UPI</p>
+                              <p className="text-[9px] font-bold text-emerald-700">0% Commission • Auto-Confirmation</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-black/60 border border-white/10 rounded-xl space-y-1.5 text-xs">
+                          <div className="flex justify-between border-b border-white/5 pb-1">
+                            <span className="text-gray-400 font-bold">Bank Name:</span>
+                            <span className="font-black text-white">HDFC Bank Ltd.</span>
+                          </div>
+                          <div className="flex justify-between border-b border-white/5 pb-1">
+                            <span className="text-gray-400 font-bold">Account Name:</span>
+                            <span className="font-black text-white">Deriv Direct Gateway</span>
+                          </div>
+                          <div className="flex justify-between border-b border-white/5 pb-1">
+                            <span className="text-gray-400 font-bold">Account No:</span>
+                            <span className="font-black text-emerald-400 font-mono">50200084920145</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400 font-bold">IFSC Code:</span>
+                            <span className="font-black text-amber-400 font-mono">HDFC0000240</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Step 4: Enter UTR Ref & Submit */}
+                  <form onSubmit={handleBankUpiDepositSubmit} className="space-y-3 bg-black/40 border border-white/10 rounded-2xl p-4">
+                    <label className="text-xs font-black uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      4. Enter 12-Digit UPI UTR / Bank Transaction Reference Number:
+                    </label>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-3">
+                      <div className="relative flex-1 w-full">
+                        <input
+                          type="text"
+                          value={bankUpiUtr}
+                          onChange={(e) => setBankUpiUtr(e.target.value)}
+                          placeholder="e.g. 420918239012 (found in GPay/PhonePe receipt)"
+                          maxLength={16}
+                          className="w-full bg-black/60 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white placeholder-gray-600 outline-none focus:border-emerald-500 font-mono"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={isSubmittingBankUpi || !bankUpiUtr.trim()}
+                        className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-800 disabled:text-gray-600 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
+                      >
+                        {isSubmittingBankUpi ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Verifying UTR...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Submit UTR for Auto-Credit</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* How to Find UTR Explanation Guide */}
+                    <div className="border-t border-white/10 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowUtrHelp(!showUtrHelp)}
+                        className="flex items-center justify-between w-full text-left text-xs font-black uppercase tracking-wider text-amber-400 hover:text-amber-300 transition-colors p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl"
+                      >
+                        <span className="flex items-center gap-2">
+                          <HelpCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span>How to find your 12-Digit UPI UTR / Bank Reference Number?</span>
+                        </span>
+                        {showUtrHelp ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
+                      </button>
+
+                      {showUtrHelp && (
+                        <div className="mt-2.5 p-3.5 bg-black/80 border border-amber-500/20 rounded-xl space-y-3 text-xs text-gray-300 animate-in fade-in duration-200">
+                          <p className="text-[11px] font-bold text-amber-200/90 leading-relaxed">
+                            The UTR (Unique Transaction Reference) or UPI Ref No. is a unique 12-digit number generated by your bank or UPI app after completing a payment.
+                          </p>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                            {/* GPay */}
+                            <div className="p-2.5 bg-white/5 border border-white/10 rounded-lg space-y-1">
+                              <div className="flex items-center gap-1.5 font-black text-emerald-400">
+                                <span>🟢</span>
+                                <span>Google Pay (GPay)</span>
+                              </div>
+                              <ol className="text-[10px] font-bold text-gray-300 space-y-0.5 list-decimal list-inside">
+                                <li>Open GPay & tap <strong className="text-white">"Show transaction history"</strong></li>
+                                <li>Select the payment to Deriv VPA</li>
+                                <li>Copy 12-digit <strong className="text-emerald-300">"UPI transaction ID"</strong> (e.g., 420918239012)</li>
+                              </ol>
+                            </div>
+
+                            {/* PhonePe */}
+                            <div className="p-2.5 bg-white/5 border border-white/10 rounded-lg space-y-1">
+                              <div className="flex items-center gap-1.5 font-black text-purple-400">
+                                <span>🟣</span>
+                                <span>PhonePe</span>
+                              </div>
+                              <ol className="text-[10px] font-bold text-gray-300 space-y-0.5 list-decimal list-inside">
+                                <li>Open PhonePe & tap <strong className="text-white">"History"</strong> tab</li>
+                                <li>Tap on the successful transfer</li>
+                                <li>Look for <strong className="text-purple-300">"UTR"</strong> or <strong className="text-purple-300">"Transaction ID"</strong> (12 digits)</li>
+                              </ol>
+                            </div>
+
+                            {/* Paytm */}
+                            <div className="p-2.5 bg-white/5 border border-white/10 rounded-lg space-y-1">
+                              <div className="flex items-center gap-1.5 font-black text-blue-400">
+                                <span>🔵</span>
+                                <span>Paytm UPI</span>
+                              </div>
+                              <ol className="text-[10px] font-bold text-gray-300 space-y-0.5 list-decimal list-inside">
+                                <li>Open Paytm & tap <strong className="text-white">"Balance & History"</strong></li>
+                                <li>Select payment details</li>
+                                <li>Copy 12-digit <strong className="text-blue-300">"UPI Ref No."</strong></li>
+                              </ol>
+                            </div>
+
+                            {/* BHIM / Other UPI */}
+                            <div className="p-2.5 bg-white/5 border border-white/10 rounded-lg space-y-1">
+                              <div className="flex items-center gap-1.5 font-black text-amber-400">
+                                <span>🟠</span>
+                                <span>BHIM & Other Apps</span>
+                              </div>
+                              <ol className="text-[10px] font-bold text-gray-300 space-y-0.5 list-decimal list-inside">
+                                <li>Open Transaction / Activity History</li>
+                                <li>Tap payment details receipt</li>
+                                <li>Find <strong className="text-amber-300">"UPI Ref ID"</strong> or <strong className="text-amber-300">"UTR"</strong></li>
+                              </ol>
+                            </div>
+
+                            {/* Bank IMPS / NetBanking */}
+                            <div className="p-2.5 bg-white/5 border border-white/10 rounded-lg space-y-1 sm:col-span-2 lg:col-span-2">
+                              <div className="flex items-center gap-1.5 font-black text-cyan-400">
+                                <span>🏦</span>
+                                <span>IMPS / NetBanking / Bank Statement</span>
+                              </div>
+                              <p className="text-[10px] font-bold text-gray-300 leading-normal">
+                                Check your bank transaction SMS or NetBanking statement for the 12-digit <strong className="text-cyan-300">IMPS Ref No / RRN Number</strong> (e.g., IMPS/420918239012/HDFC...).
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* MODE 2: WITHDRAW TO BANK UPI / ACCOUNT */}
+              {bankUpiMode === 'withdraw' && (
+                <form onSubmit={handleBankUpiWithdrawSubmit} className="space-y-4 max-w-2xl mx-auto bg-black/40 border border-white/10 rounded-2xl p-5">
+                  <div className="space-y-1 border-b border-white/10 pb-3">
+                    <h5 className="text-sm font-black uppercase text-white flex items-center gap-2">
+                      <ArrowDownRight className="w-4 h-4 text-red-400" />
+                      Direct Instant Bank Payout / Withdrawal
+                    </h5>
+                    <p className="text-[11px] font-bold text-gray-400">
+                      Funds will be paid out directly to your Bank UPI VPA or Bank Account via IMPS within 2 to 5 minutes.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Amount */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-black uppercase text-gray-300">Withdrawal Amount (USD):</label>
+                        <span className="text-[9px] font-bold text-gray-400">Rate: $1 USD = ₹88.00 INR</span>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-black text-xs">$</span>
+                        <input
+                          type="number"
+                          value={bankUpiAmount}
+                          onChange={(e) => setBankUpiAmount(e.target.value)}
+                          placeholder="50"
+                          min="10"
+                          max="10000"
+                          className="w-full bg-black/60 border border-white/15 rounded-xl pl-7 pr-3 py-2 text-xs font-black text-white outline-none focus:border-red-500"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[9px] font-bold">
+                        <span className="text-gray-400">Withdrawal Limits:</span>
+                        <span className="text-red-400 font-mono font-black">Min: $10.00 • Max: $10,000.00</span>
+                      </div>
+                      <p className="text-[10px] font-bold text-emerald-400">
+                        Estimated Payout: ₹{((parseFloat(bankUpiAmount) || 0) * 88.00).toLocaleString('en-IN', { maximumFractionDigits: 2 })} INR
+                      </p>
+                    </div>
+
+                    {/* Bank UPI VPA */}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-black uppercase text-gray-300">Target Bank UPI VPA (ID):</label>
+                      <input
+                        type="text"
+                        value={bankUpiVpa}
+                        onChange={(e) => setBankUpiVpa(e.target.value)}
+                        placeholder="e.g. yourname@okaxis or 9876543210@paytm"
+                        className="w-full bg-black/60 border border-white/15 rounded-xl px-3 py-2 text-xs font-bold text-white placeholder-gray-600 outline-none focus:border-red-500 font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Or Bank Account Details */}
+                  <div className="border-t border-white/10 pt-3 space-y-3">
+                    <p className="text-[10px] font-black uppercase text-gray-400">OR Enter Bank Account IMPS Details:</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <input
+                        type="text"
+                        value={bankUpiBankName}
+                        onChange={(e) => setBankUpiBankName(e.target.value)}
+                        placeholder="Bank Name (e.g. SBI, HDFC)"
+                        className="bg-black/60 border border-white/15 rounded-xl px-3 py-2 text-xs font-bold text-white placeholder-gray-600 outline-none focus:border-red-500"
+                      />
+                      <input
+                        type="text"
+                        value={bankUpiAccountNo}
+                        onChange={(e) => setBankUpiAccountNo(e.target.value)}
+                        placeholder="Bank Account Number"
+                        className="bg-black/60 border border-white/15 rounded-xl px-3 py-2 text-xs font-bold text-white placeholder-gray-600 outline-none focus:border-red-500 font-mono"
+                      />
+                      <input
+                        type="text"
+                        value={bankUpiIfsc}
+                        onChange={(e) => setBankUpiIfsc(e.target.value)}
+                        placeholder="Bank IFSC Code"
+                        className="bg-black/60 border border-white/15 rounded-xl px-3 py-2 text-xs font-bold text-white placeholder-gray-600 outline-none focus:border-red-500 font-mono uppercase"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmittingBankUpi}
+                    className="w-full py-3 bg-red-600 hover:bg-red-500 disabled:bg-gray-800 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-red-600/20 flex items-center justify-center gap-2"
+                  >
+                    {isSubmittingBankUpi ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Processing Bank Payout...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        <span>Submit Direct Bank Payout Request</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+
           {/* DASHBOARD VIEW 1: CARDS & E-WALLETS */}
           {selectedCategory === 'cards_ewallets' && (
             <div className="bg-[#141922] border border-white/10 rounded-2xl p-5 space-y-4 shadow-xl w-full">

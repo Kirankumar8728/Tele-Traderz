@@ -234,6 +234,7 @@ const App: React.FC = () => {
   const [adminError, setAdminError] = useState('');
   const [supportClickCount, setSupportClickCount] = useState(0);
   const [showGuideModal, setShowGuideModal] = useState(false);
+  const [showKycModal, setShowKycModal] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved as 'light' | 'dark';
@@ -424,6 +425,45 @@ const App: React.FC = () => {
         .catch(err => console.error("Failed to fetch balance:", err));
     }
   }, [account?.loginid]);
+
+  // Recurring 30-Minute KYC Verification Reminder Popup
+  useEffect(() => {
+    if (!account || account.is_virtual) {
+      setShowKycModal(false);
+      return;
+    }
+
+    const isVerified = accountStatus?.authentication?.identity?.status === 'verified';
+    if (isVerified) {
+      setShowKycModal(false);
+      return;
+    }
+
+    const THIRTY_MINS = 30 * 60 * 1000;
+    const lastShownStr = localStorage.getItem('kyc_popup_last_shown');
+    const nowTs = Date.now();
+
+    // Check if 30 mins have elapsed since last popup
+    if (!lastShownStr || nowTs - parseInt(lastShownStr, 10) >= THIRTY_MINS) {
+      const initialTimer = setTimeout(() => {
+        setShowKycModal(true);
+        localStorage.setItem('kyc_popup_last_shown', String(Date.now()));
+      }, 3000); // 3 sec initial delay
+
+      return () => clearTimeout(initialTimer);
+    }
+
+    // Set interval for every 30 minutes
+    const interval = setInterval(() => {
+      const currentVerified = accountStatus?.authentication?.identity?.status === 'verified';
+      if (!currentVerified && account && !account.is_virtual) {
+        setShowKycModal(true);
+        localStorage.setItem('kyc_popup_last_shown', String(Date.now()));
+      }
+    }, THIRTY_MINS);
+
+    return () => clearInterval(interval);
+  }, [account, accountStatus]);
 
 
 
@@ -1533,49 +1573,112 @@ const App: React.FC = () => {
         return (
           <div className="p-6 space-y-6">
             <div className="text-center">
-              <div className="w-20 h-20 bg-red-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-20 h-20 bg-red-600/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20 shadow-lg">
                 <User className="w-10 h-10 text-red-500" />
               </div>
-              <h2 className="text-2xl font-black italic uppercase">Profile</h2>
+              <h2 className="text-2xl font-black italic uppercase">Account & Profile Settings</h2>
+              {account && (
+                <div className="mt-2 flex items-center justify-center gap-2">
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                    account.is_virtual 
+                      ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' 
+                      : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  }`}>
+                    {account.is_virtual ? '⚡ Demo Account (VRTC)' : '💎 Real Account (CR)'}
+                  </span>
+                </div>
+              )}
             </div>
 
             {!account ? (
               <div className="space-y-3">
-                <button onClick={signup} className="w-full py-4 bg-red-600 rounded-2xl font-black text-sm uppercase shadow-lg shadow-red-600/20 hover:bg-red-500 transition-colors">Register</button>
-                <button onClick={login} className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl font-black text-sm uppercase hover:bg-white/10 transition-colors">Login</button>
+                <button onClick={signup} className="w-full py-4 bg-red-600 rounded-2xl font-black text-sm uppercase shadow-lg shadow-red-600/20 hover:bg-red-500 transition-colors">Register New Account</button>
+                <button onClick={login} className="w-full py-4 bg-white/5 border border-white/10 rounded-2xl font-black text-sm uppercase hover:bg-white/10 transition-colors">Login To Existing Deriv Account</button>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <p className="text-[10px] font-black text-gray-500 uppercase">Email</p>
-                  <p className="text-sm font-black text-white">{account.email}</p>
+                {/* Account Identity Details */}
+                <div className="p-5 bg-[#141922] rounded-3xl border border-white/10 space-y-3 shadow-lg">
+                  <h3 className="text-xs font-black uppercase text-gray-400 tracking-wider flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-red-500" />
+                    Account Recognition & Wallets
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-3 bg-white/5 rounded-2xl border border-white/5">
+                      <p className="text-[10px] font-black text-gray-500 uppercase">Deriv Registered Email</p>
+                      <p className="text-xs font-black text-white mt-0.5">{account.email}</p>
+                    </div>
+
+                    <div className="p-3 bg-white/5 rounded-2xl border border-white/5">
+                      <p className="text-[10px] font-black text-gray-500 uppercase">Active Login ID</p>
+                      <p className="text-xs font-mono font-black text-emerald-400 mt-0.5">{account.loginid}</p>
+                    </div>
+
+                    <div className="p-3 bg-white/5 rounded-2xl border border-white/5">
+                      <p className="text-[10px] font-black text-gray-500 uppercase">Account Wallet Type</p>
+                      <p className="text-xs font-black text-white mt-0.5">
+                        {account.is_virtual ? 'Virtual Demo USD Wallet' : 'Real Fiat USD Trading Wallet'}
+                      </p>
+                    </div>
+
+                    <div className="p-3 bg-white/5 rounded-2xl border border-white/5">
+                      <p className="text-[10px] font-black text-gray-500 uppercase">Wallet Balance</p>
+                      <p className="text-xs font-mono font-black text-emerald-400 mt-0.5">
+                        {Number(account.balance).toFixed(2)} {account.currency || 'USD'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <p className="text-[10px] font-black text-gray-500 uppercase">Login ID</p>
-                  <p className="text-sm font-black text-white">{account.loginid}</p>
-                </div>
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-black text-gray-500 uppercase">KYC Status</p>
-                    <p className={`text-sm font-black ${
-                      (account.is_virtual && (accountStatus?.authentication?.identity?.status === 'none' || accountStatus?.authentication?.identity?.status === 'verified')) || 
-                      accountStatus?.authentication?.identity?.status === 'verified' 
-                        ? 'text-green-500' 
-                        : 'text-red-500'
+
+                {/* KYC Verification Status Card */}
+                <div className="p-5 bg-[#141922] rounded-3xl border border-white/10 space-y-3 shadow-lg">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black uppercase text-gray-400 tracking-wider flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-blue-400" />
+                      KYC Verification Status
+                    </h3>
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                      account.is_virtual 
+                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                        : (accountStatus?.authentication?.identity?.status === 'verified' 
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-amber-500/20 text-amber-400 border border-amber-500/30')
                     }`}>
                       {account.is_virtual 
-                        ? (accountStatus?.authentication?.identity?.status === 'none' || accountStatus?.authentication?.identity?.status === 'verified' ? 'Verified (Demo)' : (accountStatus?.authentication?.identity?.status || 'Unverified'))
-                        : (accountStatus?.authentication?.identity?.status || 'Unverified')}
-                    </p>
+                        ? 'Demo Mode Active'
+                        : (accountStatus?.authentication?.identity?.status === 'verified' ? 'Verified ✓' : 'Verification Required')}
+                    </span>
                   </div>
-                  {(!account.is_virtual && accountStatus?.authentication?.identity?.status !== 'verified') && (
-                    <button 
-                      onClick={() => window.open('https://app.deriv.com/account/proof-of-identity', '_blank')}
-                      className="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg text-[10px] font-black uppercase tracking-wider text-white transition-colors"
-                    >
-                      Complete KYC
-                    </button>
-                  )}
+
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase">Proof of Identity (POI)</p>
+                      <p className={`text-sm font-black mt-0.5 ${
+                        account.is_virtual || accountStatus?.authentication?.identity?.status === 'verified'
+                          ? 'text-emerald-400'
+                          : 'text-amber-400'
+                      }`}>
+                        {account.is_virtual 
+                          ? 'Verified for Virtual Trading' 
+                          : (accountStatus?.authentication?.identity?.status === 'verified' ? 'Identity Verified ✓' : (accountStatus?.authentication?.identity?.status || 'Unverified / Action Required'))}
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        {account.is_virtual 
+                          ? 'Demo accounts allow instant paper trading without mandatory KYC.' 
+                          : 'Required for unlimited cashier deposits, P2P trading, and instant bank withdrawals.'}
+                      </p>
+                    </div>
+
+                    {!account.is_virtual && accountStatus?.authentication?.identity?.status !== 'verified' && (
+                      <button 
+                        onClick={() => window.open('https://app.deriv.com/account/proof-of-identity', '_blank')}
+                        className="px-4 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl text-xs font-black uppercase tracking-wider text-white transition-colors shadow-lg shadow-red-600/20 shrink-0"
+                      >
+                        Complete Deriv KYC
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -2037,7 +2140,7 @@ const App: React.FC = () => {
 
                 {/* Account selections inside menu */}
                 <div className="space-y-2">
-                  <p className="text-[9px] font-black text-gray-500 uppercase px-1">Available Accounts</p>
+                  <p className="text-[9px] font-black text-gray-400 uppercase px-1 tracking-wider">Available Account Wallets</p>
                   {(() => {
                     let accounts = JSON.parse(localStorage.getItem('deriv_accounts') || '[]');
                     if (!accounts || accounts.length === 0) {
@@ -2049,6 +2152,8 @@ const App: React.FC = () => {
                     }
                     return accounts.map((acc: any) => {
                       const liveAcc = availableAccounts.find((a: any) => a.loginid === acc.id);
+                      const isVirtual = acc.id.startsWith('VR') || acc.is_virtual;
+                      const isActive = account?.loginid === acc.id;
                       return (
                         <button 
                           key={acc.id}
@@ -2056,18 +2161,40 @@ const App: React.FC = () => {
                             switchAccount(acc.id);
                             setShowAccountMenu(false);
                           }}
-                          className={`w-full p-3 rounded-2xl border flex items-center justify-between transition-all ${account?.loginid === acc.id ? 'bg-red-600/15 border-red-600/50' : 'bg-white/5 border-white/10'}`}
+                          className={`w-full p-3.5 rounded-2xl border flex items-center justify-between transition-all ${
+                            isActive ? 'bg-red-600/15 border-red-600/50 shadow-md' : 'bg-white/5 border-white/10 hover:bg-white/10'
+                          }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${acc.id.startsWith('VR') ? 'bg-yellow-500/10 text-yellow-500' : 'bg-green-500/10 text-green-500'}`}>
-                              <ShieldCheck className="w-4 h-4" />
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                              isVirtual ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            }`}>
+                              <ShieldCheck className="w-5 h-5" />
                             </div>
                             <div className="text-left">
-                              <p className="text-xs font-black text-white">{acc.id}</p>
-                              <p className="text-[8px] font-bold text-gray-500 uppercase">{acc.id.startsWith('VR') ? 'Demo' : 'Real'}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs font-black text-white">{acc.id}</p>
+                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                  isVirtual ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                }`}>
+                                  {isVirtual ? 'Demo Account' : 'Real Account'}
+                                </span>
+                              </div>
+                              <p className="text-[10px] font-bold text-gray-400 mt-0.5 flex items-center gap-1.5">
+                                <span>{isVirtual ? 'Virtual USD' : 'Real USD Wallet'}</span>
+                                <span className="text-gray-600">•</span>
+                                <span className={isVirtual ? 'text-blue-400 font-bold' : (accountStatus?.authentication?.identity?.status === 'verified' ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold')}>
+                                  {isVirtual ? 'Demo Mode' : (accountStatus?.authentication?.identity?.status === 'verified' ? 'KYC Verified ✓' : 'KYC Verification Needed')}
+                                </span>
+                              </p>
                             </div>
                           </div>
-                          <p className="text-xs font-mono font-black">{liveAcc?.balance || '0.00'} {acc.currency}</p>
+                          <div className="text-right">
+                            <p className="text-xs font-mono font-black text-white">{liveAcc?.balance || '0.00'} {acc.currency || 'USD'}</p>
+                            {isActive && (
+                              <span className="text-[8px] font-black uppercase text-red-500 tracking-wider block mt-0.5">Active Wallet</span>
+                            )}
+                          </div>
                         </button>
                       );
                     });
@@ -2538,6 +2665,83 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 30-Minute KYC Verification Reminder Popup Modal */}
+      <AnimatePresence>
+        {showKycModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/85 backdrop-blur-md z-[300] flex items-center justify-center p-4"
+            onClick={() => setShowKycModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-md bg-[#141922] border border-red-500/30 rounded-3xl p-6 space-y-5 shadow-2xl relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setShowKycModal(false)}
+                className="absolute top-4 right-4 p-2 bg-white/5 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-red-600/10 border border-red-500/30 rounded-2xl flex items-center justify-center text-red-500 shrink-0">
+                  <ShieldAlert className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <span className="px-2 py-0.5 bg-red-500/20 border border-red-500/30 text-red-400 font-black text-[9px] uppercase tracking-wider rounded-md">
+                    Verification Reminder
+                  </span>
+                  <h3 className="text-lg font-black text-white italic uppercase mt-0.5">Complete Deriv KYC Verification</h3>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-300 leading-relaxed font-medium">
+                Your Real Account (<code className="text-emerald-400 font-mono font-bold">{account?.loginid}</code>) requires Proof of Identity (POI) verification on Deriv to unlock full cashier deposits, P2P trading, and instant bank withdrawals.
+              </p>
+
+              <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl space-y-2 text-[11px] font-bold text-gray-300">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400 uppercase">Registered Email:</span>
+                  <span className="text-white font-mono">{account?.email}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400 uppercase">KYC Identity Status:</span>
+                  <span className="text-amber-400 uppercase font-black bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                    {accountStatus?.authentication?.identity?.status || 'Unverified'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2.5 pt-1">
+                <button
+                  onClick={() => {
+                    window.open('https://app.deriv.com/account/proof-of-identity', '_blank');
+                    setShowKycModal(false);
+                  }}
+                  className="w-full py-3.5 bg-red-600 hover:bg-red-500 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg shadow-red-600/20 transition-all flex items-center justify-center gap-2"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Complete KYC Now on Deriv</span>
+                </button>
+
+                <button
+                  onClick={() => setShowKycModal(false)}
+                  className="w-full py-3 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-colors"
+                >
+                  Remind Me in 30 Minutes
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
