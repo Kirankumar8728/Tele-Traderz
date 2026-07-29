@@ -46,7 +46,8 @@ export const TIMEFRAME_GRANULARITY: Record<string, number> = {
   '24h': 86400,
 };
 
-const APP_ID_WS = import.meta.env.VITE_DERIV_APP_ID || '32FjINZV8sXfdKQcVvnZf';
+const rawAppId = import.meta.env.VITE_DERIV_APP_ID;
+const APP_ID_WS = (rawAppId && /^\d+$/.test(rawAppId)) ? rawAppId : '1089';
 export const DERIV_WS_URL = `wss://api.derivws.com/trading/v1/options/ws/public?app_id=${APP_ID_WS}`;
 
 export const CURRENCY_CONFIG: Record<string, { step: string; min: string; decimals: number }> = {

@@ -59,11 +59,13 @@ export class WebSocketManager {
 
     this.ws.onerror = (event: Event) => {
       console.error('[WebSocketManager] WebSocket error event:', event);
+      MessageRouter.getInstance().rejectAllPending('WebSocket error occurred');
     };
 
     this.ws.onclose = (event: CloseEvent) => {
       console.log(`[WebSocketManager] WebSocket closed (code: ${event.code}, reason: ${event.reason})`);
       this.ws = null;
+      MessageRouter.getInstance().rejectAllPending(event.reason || `Socket closed (code: ${event.code})`);
       if (this.onDisconnectCallback) {
         this.onDisconnectCallback(event.reason || `Socket closed (code: ${event.code})`);
       }

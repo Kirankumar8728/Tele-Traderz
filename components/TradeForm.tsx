@@ -366,7 +366,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
       </div>
 
       {/* Trade Buttons & Details Layout */}
-      <div className={`flex ${compact ? 'gap-1.5' : 'gap-4'}`}>
+      <div className={`flex ${compact ? 'gap-1.5 mb-8' : 'gap-4 mb-2'}`}>
         {/* RISE (Call) Column */}
         <div className={`flex-1 flex flex-col ${compact ? 'gap-0.5' : 'gap-2.5'}`}>
           {/* Estimate Details */}

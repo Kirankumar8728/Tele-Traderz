@@ -106,15 +106,27 @@ export class ChartEngine {
       stateMachine.transition(ChartState.CONNECTING);
       ChartConnectionManager.getInstance().connect();
 
-      // Wait for connected state before proceeding to load history
-      await new Promise<void>((resolve) => {
-        const check = setInterval(() => {
-          if (wsManager.isConnected()) {
-            clearInterval(check);
-            resolve();
-          }
-        }, 100);
-      });
+      // Wait for connected state before proceeding to load history with 10s timeout
+      try {
+        await new Promise<void>((resolve, reject) => {
+          let elapsed = 0;
+          const check = setInterval(() => {
+            if (wsManager.isConnected()) {
+              clearInterval(check);
+              resolve();
+            } else {
+              elapsed += 100;
+              if (elapsed >= 10000) {
+                clearInterval(check);
+                reject(new Error('WebSocket connection timeout'));
+              }
+            }
+          }, 100);
+        });
+      } catch (e: any) {
+        stateMachine.transition(ChartState.ERROR, e.message || 'Connection failed');
+        return;
+      }
     }
 
     // 2. Load candles only (subscribe=0)

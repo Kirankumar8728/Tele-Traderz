@@ -70,8 +70,20 @@ export class MessageRouter {
     });
   }
 
-  public clear() {
+  public rejectAllPending(reason: string = 'WebSocket disconnected') {
+    const handlers = Array.from(this.reqIdHandlers.entries());
     this.reqIdHandlers.clear();
+    handlers.forEach(([reqId, handler]) => {
+      try {
+        handler({ error: { message: reason }, req_id: reqId });
+      } catch (e) {
+        console.error(`[MessageRouter] Error rejecting handler for req_id ${reqId}:`, e);
+      }
+    });
+  }
+
+  public clear() {
+    this.rejectAllPending('Router cleared');
     this.globalHandlers.clear();
   }
 }

@@ -473,7 +473,7 @@ const App: React.FC = () => {
         if (import.meta.env.DEV) {
           console.log("[CASHIER] Fetching withdrawals...");
         }
-        const apiUrl = `${window.location.origin}/api/w-requests?t=${Date.now()}`;
+        const apiUrl = `/api/w-requests?t=${Date.now()}`;
         const res = await fetch(apiUrl, {
           headers: {
             'Accept': 'application/json',
@@ -510,11 +510,7 @@ const App: React.FC = () => {
           setTimeout(() => fetchWithdrawals(retries - 1, delay * 2), delay);
         } else {
           if (import.meta.env.DEV) {
-            console.error("[CASHIER] Failed to fetch withdrawals:", errorMsg);
-          }
-          // Only show custom alert if it's not a background refresh
-          if (retries > 1) {
-             setCustomAlert(`Could not load withdrawal history. Please check your connection.`);
+            console.warn("[CASHIER] Notice when fetching withdrawals:", errorMsg);
           }
           setWithdrawalRequests([]);
         }
@@ -1911,7 +1907,7 @@ const App: React.FC = () => {
 
         {/* Scrollable / Flexible content view */}
         <main 
-          className={`flex-1 relative min-h-0 w-full ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-6'}`}
+          className={`flex-1 relative min-h-0 w-full ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-28'}`}
           style={{ marginBottom: 'var(--total-bottom-offset)' }}
         >
           {currentView === AppView.TRADE ? (
@@ -1952,8 +1948,8 @@ const App: React.FC = () => {
                 </MobileChart>
               </div>
 
-              {/* Compact Trade Execution Panel directly above footer with ample gap */}
-              <div className="bg-[#0c0f17] border-t border-white/10 p-3 pb-24 mb-10 flex-shrink-0 z-20 overflow-y-auto max-h-[55vh] no-scrollbar">
+              {/* Compact Trade Execution Panel directly above footer with clean bottom padding */}
+              <div className="bg-[#0c0f17] border-t border-white/10 p-2.5 pb-8 flex-shrink-0 z-20 overflow-y-auto max-h-[55vh] no-scrollbar">
                 <TradeForm 
                   underlying_symbol={selectedSymbol}
                   onTrade={send}

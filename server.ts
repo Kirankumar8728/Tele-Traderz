@@ -395,8 +395,9 @@ async function startServer() {
     }
 
     // Only reward trades made through our app
-    const VALID_APP_ID = process.env.VITE_DERIV_APP_ID || '32FjINZV8sXfdKQcVvnZf';
-    if (appId && appId.toString() !== VALID_APP_ID && appId.toString() !== '111810') {
+    const VALID_APP_ID = process.env.VITE_DERIV_APP_ID || '1089';
+    const appStr = appId ? appId.toString() : '';
+    if (appId && appStr !== VALID_APP_ID && appStr !== '1089' && appStr !== '32FjINZV8sXfdKQcVvnZf' && appStr !== '111810') {
       return res.json({ success: false, reason: "External trade ignored" });
     }
 
