@@ -1907,8 +1907,7 @@ const App: React.FC = () => {
 
         {/* Scrollable / Flexible content view */}
         <main 
-          className={`flex-1 relative min-h-0 w-full ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-28'}`}
-          style={{ marginBottom: 'var(--total-bottom-offset)' }}
+          className={`flex-1 relative min-h-0 w-full ${currentView === AppView.TRADE ? 'overflow-hidden flex flex-col' : 'overflow-y-auto pb-6'}`}
         >
           {currentView === AppView.TRADE ? (
             <div className="flex-1 flex flex-col min-h-0 w-full overflow-hidden bg-[#07090e]">
@@ -1948,8 +1947,8 @@ const App: React.FC = () => {
                 </MobileChart>
               </div>
 
-              {/* Compact Trade Execution Panel directly above footer with clean bottom padding */}
-              <div className="bg-[#0c0f17] border-t border-white/10 p-2.5 pb-8 flex-shrink-0 z-20 overflow-y-auto max-h-[55vh] no-scrollbar">
+              {/* Compact Trade Execution Panel directly above footer in flex layout */}
+              <div className="bg-[#0c0f17] border-t border-white/10 p-2.5 pb-2.5 flex-shrink-0 z-20 overflow-y-auto max-h-[50vh] no-scrollbar">
                 <TradeForm 
                   underlying_symbol={selectedSymbol}
                   onTrade={send}
