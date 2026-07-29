@@ -1948,7 +1948,7 @@ const App: React.FC = () => {
               </div>
 
               {/* Compact Trade Execution Panel directly below the chart area */}
-              <div className="bg-[#0c0f17] border-t border-white/5 pt-1.5 px-3 flex-shrink-0 max-h-[42vh] overflow-y-auto no-scrollbar mb-[68px] pb-[env(safe-area-inset-bottom,16px)]">
+              <div className="bg-[#0c0f17] border-t border-white/5 pt-2 px-3 flex-shrink-0 max-h-[46vh] overflow-y-auto no-scrollbar mb-[calc(56px+env(safe-area-inset-bottom,12px))] pb-6">
                 <TradeForm 
                   underlying_symbol={selectedSymbol}
                   onTrade={send}

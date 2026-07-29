@@ -250,7 +250,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
   }, [tradeType, upData?.type]);
 
   return (
-    <div className={`z-30 ${compact ? 'space-y-2 p-0.5' : 'space-y-5 p-2.5 bg-[#0c0f17] rounded-3xl border border-white/5 shadow-2xl'}`}>
+    <div className={`z-30 ${compact ? 'space-y-2 p-0.5 pb-2' : 'space-y-5 p-2.5 bg-[#0c0f17] rounded-3xl border border-white/5 shadow-2xl'}`}>
       {/* Trading Error Display (Moved Above Form) */}
       {error && (
         <div 

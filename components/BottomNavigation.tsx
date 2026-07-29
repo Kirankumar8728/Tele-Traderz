@@ -44,7 +44,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-[#141922]/95 backdrop-blur-md border-t border-white/5 px-1 py-1 flex items-center justify-around z-[110] pb-[env(safe-area-inset-bottom,12px)] h-[56px] select-none">
+    <nav className="fixed bottom-0 left-0 right-0 bg-[#141922]/98 backdrop-blur-md border-t border-white/10 px-1 py-1 flex items-center justify-around z-[110] pb-[env(safe-area-inset-bottom,12px)] h-[calc(56px+env(safe-area-inset-bottom,12px))] select-none shadow-2xl">
       {navItems.map((item) => {
         const isActive = currentView === item.id;
         return (
