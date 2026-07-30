@@ -50,14 +50,24 @@ export const CashierHub: React.FC<CashierHubProps> = ({
 
   const realAccount = availableAccounts.find(a => !a.is_virtual);
 
+  // Auto fetch statement when account changes or when transactions tab becomes active
   useEffect(() => {
-    if (activeTab === 'transactions') {
+    if (account?.loginid) {
       setIsRefreshingTx(true);
       fetchStatement(100);
       const timer = setTimeout(() => setIsRefreshingTx(false), 800);
       return () => clearTimeout(timer);
     }
-  }, [activeTab, fetchStatement]);
+  }, [account?.loginid, fetchStatement]);
+
+  useEffect(() => {
+    if (activeTab === 'transactions' && account?.loginid) {
+      setIsRefreshingTx(true);
+      fetchStatement(100);
+      const timer = setTimeout(() => setIsRefreshingTx(false), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, account?.loginid, fetchStatement]);
 
   const handleRefreshTransactions = () => {
     setIsRefreshingTx(true);
@@ -238,14 +248,19 @@ export const CashierHub: React.FC<CashierHubProps> = ({
     ];
   }, []);
 
+  const isUsingLiveDerivData = Boolean(account && statementTransactions && statementTransactions.length > 0);
+
   const displayTransactions = useMemo(() => {
-    const sourceList = statementTransactions && statementTransactions.length > 0
+    // If user has fetched statement data from Deriv API, use that
+    // If not logged in or array is not loaded yet, fall back to sample transactions
+    const sourceList = (statementTransactions && statementTransactions.length > 0)
       ? statementTransactions
-      : defaultSampleTransactions;
+      : (account ? (statementTransactions || []) : defaultSampleTransactions);
 
     return sourceList.filter(tx => {
-      const isDep = tx.action_type.toLowerCase().includes('deposit') || tx.amount > 0;
-      const isWith = tx.action_type.toLowerCase().includes('withdrawal') || tx.amount < 0;
+      const actionType = (tx.action_type || '').toLowerCase();
+      const isDep = actionType.includes('deposit') || actionType === 'topup' || tx.amount > 0;
+      const isWith = actionType.includes('withdrawal') || tx.amount < 0;
 
       if (txFilter === 'deposit' && !isDep) return false;
       if (txFilter === 'withdrawal' && !isWith) return false;
@@ -254,13 +269,14 @@ export const CashierHub: React.FC<CashierHubProps> = ({
         const term = searchTerm.toLowerCase();
         const nameMatch = (tx.display_name || '').toLowerCase().includes(term);
         const codeMatch = (tx.longcode || '').toLowerCase().includes(term);
+        const typeMatch = actionType.includes(term);
         const idMatch = String(tx.transaction_id).includes(term);
-        return nameMatch || codeMatch || idMatch;
+        return nameMatch || codeMatch || typeMatch || idMatch;
       }
 
       return true;
     });
-  }, [statementTransactions, defaultSampleTransactions, txFilter, searchTerm]);
+  }, [statementTransactions, defaultSampleTransactions, account, txFilter, searchTerm]);
 
   const currentBoxes = activeTab === 'deposit' ? depositBoxes : withdrawBoxes;
 
