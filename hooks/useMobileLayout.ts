@@ -14,8 +14,15 @@ export interface MobileLayoutInfo {
 }
 
 export const useMobileLayout = (): MobileLayoutInfo => {
+  const checkIsMobile = (w: number) => {
+    if (typeof window === 'undefined') return false;
+    const userAgent = navigator.userAgent || '';
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    return w < 768 || (isMobileUA && w < 1024);
+  };
+
   const [layout, setLayout] = useState<MobileLayoutInfo>({
-    isMobile: typeof window !== 'undefined' ? window.innerWidth < 768 : false,
+    isMobile: typeof window !== 'undefined' ? checkIsMobile(window.innerWidth) : false,
     width: typeof window !== 'undefined' ? window.innerWidth : 360,
     height: typeof window !== 'undefined' ? window.innerHeight : 640,
     isLandscape: typeof window !== 'undefined' ? window.innerWidth > window.innerHeight : false,
@@ -28,7 +35,7 @@ export const useMobileLayout = (): MobileLayoutInfo => {
     const handleResize = () => {
       const width = window.innerWidth;
       const height = window.innerHeight;
-      const isMobile = width < 768;
+      const isMobile = checkIsMobile(width);
       const isLandscape = width > height;
 
       // Estimate safe area insets (web fallback)
