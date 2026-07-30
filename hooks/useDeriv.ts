@@ -28,12 +28,8 @@ import { ProposalEngine } from '../services/ProposalEngine';
 // ============================================================================
 // Utility / Helpers
 // ============================================================================
-const getReconnectDelay = (attempt: number) => {
-  const minDelay = 1000;
-  const maxDelay = 30000;
-  const delay = Math.min(maxDelay, minDelay * Math.pow(2, attempt));
-  const jitter = Math.random() * 1000;
-  return delay + jitter;
+const getReconnectDelay = (_attempt: number) => {
+  return 1000; // Always retry in 1 second on connection drop
 };
 
 // ============================================================================

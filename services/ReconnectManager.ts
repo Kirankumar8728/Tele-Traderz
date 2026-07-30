@@ -19,9 +19,8 @@ export class ReconnectManager {
     if (this.reconnectTimeout) return; // Reconnection already scheduled
 
     this.isReconnectingFlag = true;
-    const delays = [1000, 2000, 4000, 8000, 16000, 30000];
-    const delay = delays[Math.min(this.attempt, delays.length - 1)];
-    console.log(`[ReconnectManager] Scheduling reconnection in ${delay}ms (attempt ${this.attempt + 1})`);
+    const delay = 1000; // Always retry in 1 second on connection drop
+    console.log(`[ReconnectManager] Scheduling reconnection in 1000ms (attempt ${this.attempt + 1})`);
 
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null;

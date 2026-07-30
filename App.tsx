@@ -1931,7 +1931,7 @@ const App: React.FC = () => {
                   onDrawingsClick={() => setMobileDrawingsOpen(true)}
                   onSettingsClick={() => setMobileSettingsOpen(true)}
                   isLoading={!isConnected}
-                  chartError={error}
+                  chartError={null}
                   onRetry={clearError}
                   lastPrice={lastTick?.underlying_symbol === selectedSymbol ? lastTick?.quote : 0}
                   drawingMode={drawingMode}
