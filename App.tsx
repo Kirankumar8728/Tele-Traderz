@@ -1894,7 +1894,7 @@ const App: React.FC = () => {
   if (isMobile) {
     return (
       <div 
-        className="flex flex-col h-screen h-[100dvh] w-full bg-[#07090e] text-white overflow-hidden font-sans select-none"
+        className="fixed inset-0 flex flex-col h-full w-full bg-[#07090e] text-white overflow-hidden font-sans select-none z-0"
       >
         {/* Mobile Header with Market & Profile toggles */}
         <MobileHeader

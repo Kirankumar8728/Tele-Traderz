@@ -15,7 +15,7 @@ export interface MobileLayoutInfo {
 
 export const useMobileLayout = (): MobileLayoutInfo => {
   const [layout, setLayout] = useState<MobileLayoutInfo>({
-    isMobile: typeof window !== 'undefined' ? window.innerWidth < 768 : false,
+    isMobile: typeof window !== 'undefined' ? (window.innerWidth < 1024 || (('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth < 1280)) : false,
     width: typeof window !== 'undefined' ? window.innerWidth : 360,
     height: typeof window !== 'undefined' ? window.innerHeight : 640,
     isLandscape: typeof window !== 'undefined' ? window.innerWidth > window.innerHeight : false,
@@ -28,7 +28,9 @@ export const useMobileLayout = (): MobileLayoutInfo => {
     const handleResize = () => {
       const width = window.innerWidth;
       const height = window.innerHeight;
-      const isMobile = width < 768;
+      const hasTouch = 'ontouchstart' in window || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+      // Treat screens under 1024px, or touch devices under 1280px as mobile/tablet layout
+      const isMobile = width < 1024 || (hasTouch && width < 1280);
       const isLandscape = width > height;
 
       // Estimate safe area insets (web fallback)
