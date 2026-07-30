@@ -16,7 +16,8 @@ import {
   Globe,
   Coins,
   ShieldCheck,
-  CreditCard
+  CreditCard,
+  ExternalLink
 } from 'lucide-react';
 import { useDeriv } from '../hooks/useDeriv';
 import { Wallet, WalletTransaction, WalletTransactionsLinks } from '../src/services/derivApiService';
@@ -132,7 +133,17 @@ export const DerivWalletsView: React.FC<DerivWalletsViewProps> = ({ setCustomAle
         </div>
 
         {activeTab === 'wallets' && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <a
+              href="https://home.deriv.com/dashboard/deposit?from=portfolio&currency=USD"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5"
+              title="Open Official Deriv Deposit Portal"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>External Deposit ↗</span>
+            </a>
             <span className="text-xs text-gray-400">Conversion Currency:</span>
             <select
               value={conversionCurrency}
