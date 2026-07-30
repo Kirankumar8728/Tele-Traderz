@@ -9,6 +9,7 @@ interface MobileHeaderProps {
   isReconnecting: boolean;
   onAccountMenuOpen: () => void;
   onLoginClick: () => void;
+  onSignupClick?: () => void;
 }
 
 export const MobileHeader: React.FC<MobileHeaderProps> = ({
@@ -17,6 +18,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   isReconnecting,
   onAccountMenuOpen,
   onLoginClick,
+  onSignupClick,
 }) => {
   return (
     <header className="h-[3.75rem] pt-[env(safe-area-inset-top)] bg-[#141922] border-b border-white/5 px-3 flex items-center justify-between z-[100] flex-shrink-0 w-full select-none">
@@ -67,7 +69,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               Login
             </button>
             <button
-              onClick={onLoginClick}
+              onClick={onSignupClick || onLoginClick}
               className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 rounded-xl text-[9px] font-black uppercase tracking-wider shadow-lg shadow-red-900/15 text-white active:scale-95 transition-all"
             >
               Register

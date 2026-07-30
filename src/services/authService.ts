@@ -309,25 +309,55 @@ export const handleOAuthCallback = async (
   }
 };
 
-// We will keep tokens in memory via React context/hook, but if we need a global getter/setter:
+// We will keep tokens in memory via React context/hook, with resilient localStorage persistence for tab close/reopen:
 let inMemoryToken: string | null = null;
 let inMemoryExpiresAt: number | null = null;
 
 export const setInMemoryToken = (token: string, expiresAt: number) => {
   inMemoryToken = token;
   inMemoryExpiresAt = expiresAt;
+  try {
+    localStorage.setItem('deriv_access_token', token);
+    localStorage.setItem('deriv_token_expires_at', String(expiresAt));
+  } catch {
+    // ignore
+  }
 };
 
 export const getInMemoryToken = () => {
-    return {
-        accessToken: inMemoryToken,
-        expiresAt: inMemoryExpiresAt
+  if (!inMemoryToken) {
+    try {
+      const savedToken = localStorage.getItem('deriv_access_token');
+      const savedExpires = localStorage.getItem('deriv_token_expires_at');
+      if (savedToken && savedExpires) {
+        const exp = Number(savedExpires);
+        if (!isNaN(exp) && exp > Date.now()) {
+          inMemoryToken = savedToken;
+          inMemoryExpiresAt = exp;
+        } else {
+          localStorage.removeItem('deriv_access_token');
+          localStorage.removeItem('deriv_token_expires_at');
+        }
+      }
+    } catch {
+      // ignore
     }
+  }
+  return {
+    accessToken: inMemoryToken,
+    expiresAt: inMemoryExpiresAt
+  };
 };
 
 export const clearInMemoryToken = () => {
   inMemoryToken = null;
   inMemoryExpiresAt = null;
+  try {
+    localStorage.removeItem('deriv_access_token');
+    localStorage.removeItem('deriv_token_expires_at');
+  } catch {
+    // ignore
+  }
 };
 
 // ============================================================================
@@ -345,16 +375,31 @@ export const recoverSession = async (): Promise<boolean> => {
         return true;
       }
     }
-    return false;
   } catch {
-    return false;
+    // ignore server errors and check client storage
   }
+
+  // Fallback to client localStorage session
+  const { accessToken, expiresAt } = getInMemoryToken();
+  if (accessToken && expiresAt && expiresAt > Date.now()) {
+    return true;
+  }
+
+  return false;
 };
 
 export const performLogout = async () => {
   clearInMemoryToken();
-  const activeAcc = localStorage.getItem('deriv_active_account');
-  if (activeAcc) localStorage.removeItem('deriv_active_account');
+  try {
+    localStorage.removeItem('deriv_access_token');
+    localStorage.removeItem('deriv_token_expires_at');
+    localStorage.removeItem('deriv_active_account');
+    localStorage.removeItem('deriv_user_email');
+    sessionStorage.removeItem('processed_oauth_code');
+    clearOAuthState();
+  } catch {
+    // ignore
+  }
   
   try {
     await fetch('/api/deriv/logout', { method: 'POST' });

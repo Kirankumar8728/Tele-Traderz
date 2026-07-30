@@ -111,31 +111,51 @@ const App: React.FC = () => {
     const errorParam = urlParams.get('error');
 
     if (errorParam || (code && state)) {
+      // 1. Prevent duplicate execution of the exact same code on re-render / reload
+      if (code) {
+        const processedCode = sessionStorage.getItem('processed_oauth_code');
+        if (processedCode === code) {
+          // Clean URL parameters immediately and do not process again
+          const currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.delete('code');
+          currentUrl.searchParams.delete('state');
+          currentUrl.searchParams.delete('error');
+          currentUrl.searchParams.delete('error_description');
+          window.history.replaceState({}, '', currentUrl.pathname + (currentUrl.search || ''));
+          return;
+        }
+        sessionStorage.setItem('processed_oauth_code', code);
+      }
+
+      // 2. Clean URL parameters immediately from browser bar BEFORE token exchange call
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.delete('code');
+      currentUrl.searchParams.delete('state');
+      currentUrl.searchParams.delete('error');
+      currentUrl.searchParams.delete('error_description');
+      const cleanPath = currentUrl.pathname.startsWith('/callback') ? '/' : (currentUrl.pathname + (currentUrl.search || ''));
+      window.history.replaceState({}, '', cleanPath);
+
       const processCallback = async () => {
         try {
           const { parseOAuthCallback } = await import('./src/services/derivApiService');
           const { handleOAuthCallback } = await import('./src/services/authService');
           
           const { code: rawCode, state: rawState, error, errorDescription } = parseOAuthCallback();
-          const { token, expiresAt, returnTo } = await handleOAuthCallback(rawCode, rawState, error || errorDescription);
+          const { token, expiresAt, returnTo } = await handleOAuthCallback(code || rawCode, state || rawState, errorParam || error || errorDescription);
           
           window.dispatchEvent(new CustomEvent('OAUTH_SUCCESS_REDIRECT', {
               detail: { token, expiresAt }
           }));
-          window.history.replaceState({}, '', returnTo);
+          window.history.replaceState({}, '', returnTo || '/');
         } catch (err: unknown) {
           const errorMessage = err instanceof Error ? err.message : 'Unknown error during authentication';
-          setCustomAlert(errorMessage);
-          
-          const currentUrl = new URL(window.location.href);
-          const returnParams = new URLSearchParams(currentUrl.search);
-          returnParams.delete('code');
-          returnParams.delete('state');
-          returnParams.delete('error');
-          returnParams.delete('error_description');
-          
-          const sanitizedSearch = returnParams.toString() ? `?${returnParams.toString()}` : '';
-          window.history.replaceState({}, '', currentUrl.pathname + sanitizedSearch);
+          if (import.meta.env.DEV) {
+            console.warn('[OAuth Callback Error]', errorMessage);
+          }
+          if (!errorMessage.includes('cancelled')) {
+            setCustomAlert(errorMessage);
+          }
         }
       };
 
@@ -1912,7 +1932,8 @@ const App: React.FC = () => {
           isConnected={isConnected}
           isReconnecting={isReconnecting}
           onAccountMenuOpen={() => setShowAccountMenu(true)}
-          onLoginClick={() => setShowLoginModal(true)}
+          onLoginClick={login}
+          onSignupClick={signup}
         />
 
         {/* Scrollable / Flexible content view */}
@@ -2253,11 +2274,12 @@ const App: React.FC = () => {
               <div className="w-12 h-12 bg-red-600/10 rounded-full flex items-center justify-center mx-auto">
                 <User className="w-6 h-6 text-red-500" />
               </div>
-              <h3 className="text-md font-black uppercase">Sign In</h3>
-              <p className="text-xs font-bold text-gray-400 uppercase leading-normal">Connect your Deriv options account securely to proceed.</p>
+              <h3 className="text-md font-black uppercase">Welcome to Bynex Trader</h3>
+              <p className="text-xs font-bold text-gray-400 uppercase leading-normal">Register or sign in with your Deriv account to proceed.</p>
               <div className="space-y-2 pt-2">
-                <button onClick={login} className="w-full py-3.5 bg-red-600 rounded-2xl font-black text-xs uppercase">Connect Account</button>
-                <button onClick={() => setShowLoginModal(false)} className="w-full py-3 bg-white/5 rounded-2xl font-black text-xs uppercase">Cancel</button>
+                <button onClick={signup} className="w-full py-3.5 bg-red-600 rounded-2xl font-black text-xs uppercase shadow-lg shadow-red-600/20 hover:bg-red-500 transition-colors">Register</button>
+                <button onClick={login} className="w-full py-3 bg-white/5 border border-white/10 rounded-2xl font-black text-xs uppercase hover:bg-white/10 transition-colors">Login</button>
+                <button onClick={() => setShowLoginModal(false)} className="w-full py-2 text-[10px] font-black text-gray-500 uppercase hover:text-white transition-colors">Cancel</button>
               </div>
             </div>
           </div>

@@ -779,11 +779,41 @@ export const useDeriv = () => {
     }
   }, []);
 
-  const logout = useCallback(() => {
-    clearInMemoryToken();
-    localStorage.removeItem('deriv_active_account');
+  const logout = useCallback(async () => {
+    // 1. Cancel pending auth reconnect timeouts
+    if (authReconnectTimeout.current) {
+      clearTimeout(authReconnectTimeout.current);
+      authReconnectTimeout.current = null;
+    }
+    if (pingIntervalAuth.current) {
+      clearInterval(pingIntervalAuth.current);
+      pingIntervalAuth.current = null;
+    }
+
+    // 2. Detach event listeners and close WebSocket immediately
+    if (authWs.current) {
+      authWs.current.onopen = null;
+      authWs.current.onmessage = null;
+      authWs.current.onerror = null;
+      authWs.current.onclose = null;
+      if (authWs.current.readyState === WebSocket.OPEN || authWs.current.readyState === WebSocket.CONNECTING) {
+        authWs.current.close();
+      }
+      authWs.current = null;
+    }
+
+    // 3. Clear auth state and tokens across memory and storage
+    const { performLogout } = await import('../src/services/authService');
+    await performLogout();
+
+    // 4. Reset React state
     setAccount(null);
-    window.location.reload();
+    setAvailableAccounts([]);
+    setIsReconnecting(false);
+    setError(null);
+
+    // 5. Navigate cleanly to root
+    window.location.href = '/';
   }, []);
 
   const switchAccount = useCallback(async (loginid: string) => {
