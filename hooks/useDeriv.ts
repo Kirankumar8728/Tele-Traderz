@@ -87,6 +87,8 @@ export const useDeriv = () => {
   const pingIntervalAuth = useRef<any>(null);
   const connectAuthRef = useRef<any>(null);
   const proposalWs = useRef<Record<string, WebSocket | null>>({});
+  const prevBalanceRef = useRef<number | null>(null);
+  const isTradePayoutRef = useRef<boolean>(false);
 
   const clearProposals = useCallback(() => {
     // Phase 11: Cleanup
@@ -316,22 +318,41 @@ export const useDeriv = () => {
               setAvailableAccounts(prev => prev.map(acc => ({ ...acc, email })));
             }
             break;
-          case 'balance':
+          case 'balance': {
+            let newBal: number | undefined;
             if (data.balance.accounts) {
               const accountsMap = data.balance.accounts;
-              setAccount(prev => prev && accountsMap[prev.loginid] ? { ...prev, balance: accountsMap[prev.loginid].balance } : prev);
+              setAccount(prev => {
+                if (prev && accountsMap[prev.loginid]) {
+                  newBal = accountsMap[prev.loginid].balance;
+                  return { ...prev, balance: newBal ?? prev.balance };
+                }
+                return prev;
+              });
               setAvailableAccounts(prev => prev.map(acc => 
-                accountsMap[acc.loginid] ? { ...acc, balance: accountsMap[acc.loginid].balance } : acc
+                accountsMap[acc.loginid] ? { ...acc, balance: accountsMap[acc.loginid].balance ?? acc.balance } : acc
               ));
-            } else {
-              setAccount(prev => prev ? ({ ...prev, balance: data.balance.balance, currency: data.balance.currency }) : null);
-              setAvailableAccounts(prev => prev.map(acc => acc.loginid === data.balance.loginid ? { ...acc, balance: data.balance.balance } : acc));
+            } else if (data.balance) {
+              newBal = data.balance.balance;
+              const val = newBal;
+              setAccount(prev => prev ? ({ ...prev, balance: val ?? prev.balance, currency: data.balance.currency || prev.currency }) : null);
+              setAvailableAccounts(prev => prev.map(acc => acc.loginid === data.balance.loginid ? { ...acc, balance: val ?? acc.balance } : acc));
+            }
+
+            if (newBal !== undefined && prevBalanceRef.current !== null) {
+              if (newBal > prevBalanceRef.current && !isTradePayoutRef.current) {
+                setSuccess('Amount Successfully Deposited. Start Trading now. 🚀');
+              }
+            }
+            if (newBal !== undefined) {
+              prevBalanceRef.current = newBal;
             }
             break;
+          }
           case 'transaction':
             // Check for real money deposit
             if (data.transaction && data.transaction.action === 'deposit') {
-              setSuccess('Deposit Successful! Balance updated.');
+              setSuccess('Amount Successfully Deposited. Start Trading now. 🚀');
             }
             // Live update for trade history
             authWs.current?.send(JSON.stringify({ profit_table: 1, limit: 50, description: 1 }));

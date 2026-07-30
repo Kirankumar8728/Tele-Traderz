@@ -270,6 +270,7 @@ const App: React.FC = () => {
     accountStatus,
     sellErrors,
     error,
+    success,
     send, 
     login, 
     signup,
@@ -287,6 +288,13 @@ const App: React.FC = () => {
     setOnTradeExecuted,
     setOnTradeClosed
   } = useDeriv();
+
+  useEffect(() => {
+    if (success) {
+      setCustomAlert(success);
+      clearError();
+    }
+  }, [success, clearError]);
 
   useEffect(() => {
     console.log('Account Status:', accountStatus);

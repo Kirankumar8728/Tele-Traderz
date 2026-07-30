@@ -11,12 +11,7 @@ import {
   CheckCircle2, 
   RefreshCw, 
   Wallet, 
-  Lock, 
-  X, 
-  Globe, 
-  ShieldCheck,
-  Zap,
-  ArrowLeft
+  Zap
 } from 'lucide-react';
 import { DerivAccount } from '../types';
 import { useDeriv } from '../hooks/useDeriv';
@@ -28,14 +23,6 @@ interface CashierHubProps {
   setCustomAlert?: (msg: string) => void;
 }
 
-interface EmbedModalState {
-  isOpen: boolean;
-  title: string;
-  url: string;
-  iconType: 'usd' | 'p2p' | 'crypto' | 'agent';
-  mode: 'deposit' | 'withdraw';
-}
-
 export const CashierHub: React.FC<CashierHubProps> = ({
   account,
   setCustomAlert
@@ -43,9 +30,6 @@ export const CashierHub: React.FC<CashierHubProps> = ({
   const { availableAccounts, switchAccount, createNewRealAccount, signup } = useDeriv();
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit');
   const [isCreatingAccount, setIsCreatingAccount] = useState<boolean>(false);
-
-  // Embedded iframe overlay state
-  const [embedModal, setEmbedModal] = useState<EmbedModalState | null>(null);
 
   const realAccount = availableAccounts.find(a => !a.is_virtual);
 
@@ -63,12 +47,7 @@ export const CashierHub: React.FC<CashierHubProps> = ({
     }
   };
 
-  const handleBoxClick = (
-    title: string,
-    url: string,
-    iconType: 'usd' | 'p2p' | 'crypto' | 'agent',
-    mode: 'deposit' | 'withdraw'
-  ) => {
+  const handleBoxClick = (url: string) => {
     // If user is currently on Demo mode, but has a real account, switch to real account
     if (account?.is_virtual && realAccount) {
       switchAccount(realAccount.loginid);
@@ -77,13 +56,8 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       }
     }
 
-    setEmbedModal({
-      isOpen: true,
-      title,
-      url,
-      iconType,
-      mode
-    });
+    // Open link directly in external browser window
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const depositBoxes = [
@@ -94,7 +68,6 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       description: 'Fund your account instantly using Visa, Mastercard, Skrill, Neteller, or local bank transfers.',
       url: 'https://home.deriv.com/dashboard/deposit?from=portfolio&currency=USD',
       icon: CreditCard,
-      iconType: 'usd' as const,
       textColor: 'text-emerald-400',
       badge: 'POPULAR',
       gradient: 'from-emerald-950/80 via-[#141922] to-emerald-900/40 border-emerald-500/40 hover:border-emerald-500/80'
@@ -106,7 +79,6 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       description: 'Buy USD directly from local verified traders using UPI, Bank Transfer, M-Pesa, or GPay.',
       url: 'https://dp2p.deriv.com/?operation=buy&lang=en&currency=USD',
       icon: Users,
-      iconType: 'p2p' as const,
       textColor: 'text-cyan-400',
       badge: '0% FEE',
       gradient: 'from-cyan-950/80 via-[#141922] to-blue-900/40 border-cyan-500/40 hover:border-cyan-500/80'
@@ -118,7 +90,6 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       description: 'Deposit cryptocurrency directly: USDT (TRC20/ERC20), BTC, ETH, LTC, BUSD or USDC.',
       url: 'https://home.deriv.com/dashboard/deposit?from=portfolio&flow=crypto',
       icon: Coins,
-      iconType: 'crypto' as const,
       textColor: 'text-amber-400',
       badge: 'INSTANT',
       gradient: 'from-amber-950/80 via-[#141922] to-orange-900/40 border-amber-500/40 hover:border-amber-500/80'
@@ -130,7 +101,6 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       description: 'Deposit cash through certified Deriv payment agents operating in your local currency.',
       url: 'https://home.deriv.com/dashboard/deposit/payment-agent?from=portfolio',
       icon: Building2,
-      iconType: 'agent' as const,
       textColor: 'text-purple-400',
       badge: 'LOCAL CASH',
       gradient: 'from-purple-950/80 via-[#141922] to-indigo-900/40 border-purple-500/40 hover:border-purple-500/80'
@@ -145,7 +115,6 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       description: 'Withdraw funds back directly to your verified bank account, credit card, or e-wallet.',
       url: 'https://home.deriv.com/dashboard/withdraw?from=portfolio&currency=USD',
       icon: ArrowUpRight,
-      iconType: 'usd' as const,
       textColor: 'text-rose-400',
       badge: 'FAST PAYOUT',
       gradient: 'from-rose-950/80 via-[#141922] to-red-900/40 border-rose-500/40 hover:border-rose-500/80'
@@ -157,7 +126,6 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       description: 'Sell your USD balance to local buyers and receive payment straight into your local bank or UPI.',
       url: 'https://dp2p.deriv.com/?operation=sell&lang=en&currency=USD',
       icon: Users,
-      iconType: 'p2p' as const,
       textColor: 'text-cyan-400',
       badge: 'HIGH RATES',
       gradient: 'from-cyan-950/80 via-[#141922] to-blue-900/40 border-cyan-500/40 hover:border-cyan-500/80'
@@ -169,7 +137,6 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       description: 'Send crypto funds directly from your account to your external personal crypto wallet.',
       url: 'https://home.deriv.com/dashboard/withdraw?from=portfolio&flow=crypto',
       icon: Coins,
-      iconType: 'crypto' as const,
       textColor: 'text-amber-400',
       badge: 'SECURE',
       gradient: 'from-amber-950/80 via-[#141922] to-orange-900/40 border-amber-500/40 hover:border-amber-500/80'
@@ -181,7 +148,6 @@ export const CashierHub: React.FC<CashierHubProps> = ({
       description: 'Withdraw funds through authorized payment agents and receive cash in local currency.',
       url: 'https://home.deriv.com/dashboard/withdraw/payment-agent?from=portfolio',
       icon: Building2,
-      iconType: 'agent' as const,
       textColor: 'text-purple-400',
       badge: 'LOCAL CASH',
       gradient: 'from-purple-950/80 via-[#141922] to-indigo-900/40 border-purple-500/40 hover:border-purple-500/80'
@@ -317,7 +283,7 @@ export const CashierHub: React.FC<CashierHubProps> = ({
           return (
             <div
               key={box.id}
-              onClick={() => handleBoxClick(box.title, box.url, box.iconType, activeTab)}
+              onClick={() => handleBoxClick(box.url)}
               className={`bg-gradient-to-b ${box.gradient} border rounded-2xl p-5 shadow-xl hover:shadow-2xl transition-all cursor-pointer group flex flex-col justify-between relative overflow-hidden hover:scale-[1.02] active:scale-[0.98]`}
             >
               <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full blur-xl pointer-events-none group-hover:bg-white/10 transition-all" />
@@ -355,93 +321,6 @@ export const CashierHub: React.FC<CashierHubProps> = ({
           );
         })}
       </div>
-
-      {/* FULL SCREEN EMBEDDED OVERLAY MODAL */}
-      {embedModal?.isOpen && (
-        <div className="fixed inset-0 z-50 bg-[#0a0d14]/98 flex flex-col backdrop-blur-md animate-in fade-in duration-200">
-          
-          {/* Modal Top Control Bar */}
-          <div className="bg-[#141922] border-b border-white/10 px-4 py-3 flex items-center justify-between gap-3 shadow-xl shrink-0">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setEmbedModal(null)}
-                className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white rounded-xl transition-all flex items-center gap-1 text-xs font-bold"
-                title="Close Cashier Gateway"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Back</span>
-              </button>
-
-              <div className="h-5 w-[1px] bg-white/10" />
-
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
-                    {embedModal.title}
-                  </h3>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                    Official Deriv Gateway
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-mono mt-0.5">
-                  <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
-                  <span className="truncate max-w-xs sm:max-w-md">{embedModal.url}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <a
-                href={embedModal.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5 shrink-0"
-              >
-                <span>Open Direct Page</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-
-              <button
-                onClick={() => setEmbedModal(null)}
-                className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 hover:text-white rounded-xl transition-all shadow-md shrink-0"
-                title="Close"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Fallback Tip Bar */}
-          <div className="bg-emerald-950/40 border-b border-emerald-500/20 px-4 py-1.5 text-emerald-300 text-[11px] flex items-center justify-between gap-2 shrink-0">
-            <div className="flex items-center gap-2 truncate">
-              <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span>
-                Embedded Deriv Cashier View. If your browser blocks iframe loading due to strict security rules, click <strong>"Open Direct Page"</strong>.
-              </span>
-            </div>
-            <a
-              href={embedModal.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline font-bold text-emerald-200 shrink-0 hover:text-white"
-            >
-              Launch Direct ↗
-            </a>
-          </div>
-
-          {/* Iframe Frame Body */}
-          <div className="flex-1 w-full bg-white relative">
-            <iframe
-              src={embedModal.url}
-              className="w-full h-full border-0"
-              title={embedModal.title}
-              allow="payment; camera; microphone; geolocation"
-            />
-          </div>
-
-        </div>
-      )}
 
     </div>
   );
