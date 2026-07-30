@@ -47,7 +47,6 @@ interface TradingChartProps {
   onIndicatorsClick?: () => void;
   onDrawingsClick?: () => void;
   onSettingsClick?: () => void;
-  onAIClick?: () => void;
 }
 
 let overlaysRegistered = false;
@@ -63,7 +62,6 @@ const TradingChart: React.FC<TradingChartProps> = ({
   onIndicatorsClick,
   onDrawingsClick,
   onSettingsClick,
-  onAIClick,
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -881,7 +879,6 @@ const TradingChart: React.FC<TradingChartProps> = ({
         onIndicatorsClick={onIndicatorsClick}
         onDrawingsClick={onDrawingsClick}
         onSettingsClick={onSettingsClick}
-        onAIClick={onAIClick}
       />
 
       {/* 2. BODY LAYOUT (Left Toolbar + Chart Area + Right Collapsible Sidebar) */}

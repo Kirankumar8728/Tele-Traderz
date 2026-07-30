@@ -23,7 +23,6 @@ interface ChartToolbarProps {
   onIndicatorsClick?: () => void;
   onDrawingsClick?: () => void;
   onSettingsClick?: () => void;
-  onAIClick?: () => void;
 }
 
 const FAVORITE_SYMBOLS = [
@@ -48,7 +47,6 @@ export const ChartToolbar: React.FC<ChartToolbarProps> = ({
   onIndicatorsClick,
   onDrawingsClick,
   onSettingsClick,
-  onAIClick,
 }) => {
   const {
     isFullscreen,
@@ -71,12 +69,8 @@ export const ChartToolbar: React.FC<ChartToolbarProps> = ({
         onDrawingsClick();
         return;
       }
-      if (tab === 'settings' && onSettingsClick) {
+      if ((tab === 'settings' || tab === 'ai') && onSettingsClick) {
         onSettingsClick();
-        return;
-      }
-      if (tab === 'ai' && onAIClick) {
-        onAIClick();
         return;
       }
     }
