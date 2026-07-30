@@ -37,7 +37,10 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { DerivAccount } from '../types';
+import { useDeriv } from '../hooks/useDeriv';
+import { generateAuthUrl } from '../src/services/derivApiService';
 import { P2PView } from './P2PView';
+import { DerivWalletsView } from './DerivWalletsView';
 
 interface PaymentAgent {
   id: number;
@@ -286,8 +289,27 @@ export const CashierHub: React.FC<CashierHubProps> = ({
   onNavigateToP2P,
   setCustomAlert
 }) => {
+  const { availableAccounts, switchAccount, createNewRealAccount, signup } = useDeriv();
+  const [isCreatingAccount, setIsCreatingAccount] = useState<boolean>(false);
+
+  const realAccount = availableAccounts.find(a => !a.is_virtual);
+
+  const handleCreateRealAccount = async () => {
+    setIsCreatingAccount(true);
+    try {
+      await createNewRealAccount('USD');
+      if (setCustomAlert) setCustomAlert('Real account successfully created!');
+    } catch (e: any) {
+      console.warn('Real account creation failed:', e);
+      if (setCustomAlert) setCustomAlert(e.message || 'Redirecting to Deriv real account registration portal...');
+      signup();
+    } finally {
+      setIsCreatingAccount(false);
+    }
+  };
+
   // Navigation state: null = Sub Payment Categories view; string = specific payment dashboard selected
-  const [selectedCategory, setSelectedCategory] = useState<'bank_upi' | 'cards_ewallets' | 'p2p' | 'agents' | 'crypto' | 'transfer' | 'express' | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<'deriv_wallets' | 'bank_upi' | 'cards_ewallets' | 'p2p' | 'agents' | 'crypto' | 'transfer' | 'express' | null>(null);
 
   // Direct Bank UPI Gateway State
   const [bankUpiMode, setBankUpiMode] = useState<'deposit' | 'withdraw'>('deposit');
@@ -526,6 +548,14 @@ export const CashierHub: React.FC<CashierHubProps> = ({
   // Helper for Breadcrumb Category Details
   const getCategoryInfo = (tab: typeof selectedCategory) => {
     switch (tab) {
+      case 'deriv_wallets':
+        return {
+          title: 'Deriv Multi-Currency Wallets',
+          icon: Wallet,
+          color: 'text-emerald-400',
+          badgeBg: 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400',
+          desc: 'Manage your official Deriv Wallets (Main, P2P, Partner, Payment Agent) and query cursor-paginated transaction history.'
+        };
       case 'bank_upi':
         return {
           title: 'Direct Bank UPI & Transfer',
@@ -597,6 +627,19 @@ export const CashierHub: React.FC<CashierHubProps> = ({
   const CurrentIcon = currentInfo.icon;
 
   const CATEGORIES = [
+    {
+      id: 'deriv_wallets' as const,
+      title: 'Deriv Multi-Currency Wallets',
+      icon: Wallet,
+      color: 'text-emerald-400',
+      badge: 'Official API • Multi-Wallet',
+      badgeBg: 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400',
+      borderHover: 'hover:border-emerald-500/50 hover:shadow-emerald-500/10',
+      desc: 'View & manage your Deriv Wallets (Main, P2P, Partner, Payment Agent) with native balances, conversion rates, and transaction logs.',
+      minLimit: '$0.00 USD',
+      maxLimit: 'Unlimited',
+      tags: ['Main Wallet', 'P2P Wallet', 'Partner Wallet', 'Payment Agent Wallet', 'Transactions']
+    },
     {
       id: 'bank_upi' as const,
       title: 'Direct Bank UPI & Transfer',
@@ -745,6 +788,61 @@ export const CashierHub: React.FC<CashierHubProps> = ({
         </div>
       </div>
 
+      {/* REAL ACCOUNT DEMO NOTICE & SWITCH / CREATE OPTION */}
+      {account?.is_virtual && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-300 shadow-lg">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white flex items-center gap-2">
+                Currently on Demo Account ({account.loginid})
+              </p>
+              <p className="text-[11px] text-amber-300/80 mt-0.5">
+                Cashier transactions, deposits, withdrawals, and Deriv Wallets operate on Real accounts.
+                {realAccount ? (
+                  <> Real account <span className="font-mono font-bold text-white">{realAccount.loginid}</span> is ready.</>
+                ) : (
+                  <> No Real account is currently connected to your login.</>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+            {realAccount ? (
+              <button
+                onClick={() => switchAccount(realAccount.loginid)}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Switch to Real Account ({realAccount.loginid})
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={handleCreateRealAccount}
+                  disabled={isCreatingAccount}
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5"
+                >
+                  {isCreatingAccount ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
+                  Add Real Account ($ USD)
+                </button>
+                <button
+                  onClick={() => signup()}
+                  className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs rounded-xl border border-white/20 transition-all flex items-center gap-1.5"
+                  title="Open Deriv Portal Registration"
+                >
+                  <span>Portal</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* STATE 1: ONLY SUB PAYMENT CATEGORIES DISPLAYED WHEN CASHIER IS CLICKED */}
       {selectedCategory === null ? (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -873,6 +971,11 @@ export const CashierHub: React.FC<CashierHubProps> = ({
         /* STATE 2: SPECIFIC PAYMENT DASHBOARD SELECTED */
         <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-300 w-full">
           
+          {/* DASHBOARD VIEW: DERIV MULTI-CURRENCY WALLETS */}
+          {selectedCategory === 'deriv_wallets' && (
+            <DerivWalletsView setCustomAlert={setCustomAlert} />
+          )}
+
           {/* DASHBOARD VIEW: DIRECT BANK UPI & INSTANT TRANSFER */}
           {selectedCategory === 'bank_upi' && (
             <div className="bg-[#141922] border border-white/10 rounded-2xl p-4 sm:p-6 space-y-5 shadow-xl w-full">

@@ -15,6 +15,12 @@ import {
   getAccountsInfo,
   generateAuthUrl,
   resetDemoBalanceRest,
+  createRealAccountRest,
+  getWalletList,
+  getWalletTransactions,
+  Wallet,
+  WalletTransaction,
+  WalletTransactionsResponse,
 } from '../src/services/derivApiService';
 import { getInMemoryToken, clearInMemoryToken } from '../src/services/authService';
 import { ProposalEngine } from '../services/ProposalEngine';
@@ -50,6 +56,9 @@ export const useDeriv = () => {
   const [sellErrors, setSellErrors] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
+  const [isWalletsLoading, setIsWalletsLoading] = useState(false);
   const onTradeExecutedRef = useRef<((trade: any) => void) | null>(null);
   const onTradeClosedRef = useRef<((trade: any) => void) | null>(null);
 
@@ -890,6 +899,55 @@ export const useDeriv = () => {
     }
   }, [account]);
 
+  const fetchWallets = useCallback(async (conversionCurrency?: string) => {
+    const token = getInMemoryToken().accessToken;
+    if (!token) return [];
+    setIsWalletsLoading(true);
+    try {
+      const list = await getWalletList(token, conversionCurrency);
+      setWallets(list);
+      return list;
+    } catch (e: unknown) {
+      console.warn('[Deriv Wallets] Error fetching wallet list:', e);
+      return [];
+    } finally {
+      setIsWalletsLoading(false);
+    }
+  }, []);
+
+  const fetchWalletTransactions = useCallback(async (walletType: string = 'main', params?: any) => {
+    const token = getInMemoryToken().accessToken;
+    if (!token) return null;
+    try {
+      const res = await getWalletTransactions(token, walletType, params);
+      setWalletTransactions(res.data || []);
+      return res;
+    } catch (e: unknown) {
+      console.warn('[Deriv Wallets] Error fetching wallet transactions:', e);
+      return null;
+    }
+  }, []);
+
+  const createNewRealAccount = useCallback(async (currency: string = 'USD') => {
+    const token = getInMemoryToken().accessToken;
+    if (!token) {
+      throw new Error('Not authenticated with Deriv');
+    }
+    const res = await createRealAccountRest(token, { currency, account_type: 'real', group: 'row' });
+    // Refresh account info after creation
+    try {
+      const updatedAccounts = await getAccountsInfo(token);
+      setAvailableAccounts(updatedAccounts);
+      const realAcc = updatedAccounts.find(a => !a.is_virtual);
+      if (realAcc) {
+        setAccount(realAcc);
+      }
+    } catch (e) {
+      console.warn('Failed to refresh accounts after creation:', e);
+    }
+    return res;
+  }, []);
+
   return { 
     isConnected, 
     isReconnecting,
@@ -905,6 +963,11 @@ export const useDeriv = () => {
     sellErrors,
     error,
     success,
+    wallets,
+    walletTransactions,
+    isWalletsLoading,
+    fetchWallets,
+    fetchWalletTransactions,
     send, 
     login, 
     signup,
@@ -921,6 +984,7 @@ export const useDeriv = () => {
     clearError,
     sellContract,
     resetBalance,
+    createNewRealAccount,
     setOnTradeExecuted,
     setOnTradeClosed
   };

@@ -171,6 +171,178 @@ export const resetDemoBalanceRest = async (accountId: string, token: string): Pr
   }
 };
 
+export const createRealAccountRest = async (
+  token: string,
+  params: { currency?: string; group?: string; account_type?: 'real' | 'demo' } = {}
+): Promise<Record<string, unknown>> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/trading/v1/options/accounts`, {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(token),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        currency: params.currency || 'USD',
+        group: params.group || 'row',
+        account_type: params.account_type || 'real',
+      }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      if (data.errors && data.errors.length > 0 && data.errors[0].message) {
+        throw new Error(data.errors[0].message);
+      }
+      throw new Error(`Failed to create real account: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error: unknown) {
+    throw new Error(error instanceof Error ? error.message : 'Network error creating real account');
+  }
+};
+
+// ============================================================================
+// Deriv Wallet Management (REST APIs)
+// Specifications: https://staging-developers.deriv.com/llms/wallet-list.md
+// and https://staging-developers.deriv.com/llms/wallet-transactions.md
+// ============================================================================
+
+export interface WalletCurrencyBalance {
+  balance: string;
+  input: string;
+  output: string;
+}
+
+export interface WalletTotalBalance {
+  converted_to: string;
+  approximate_total_balance: string;
+  approximate_total_input: string;
+  approximate_total_output: string;
+}
+
+export interface Wallet {
+  wallet_id: string;
+  type: 'main' | 'p2p' | 'partner' | 'payment_agent' | string;
+  balances: Record<string, WalletCurrencyBalance>;
+  total_balance?: WalletTotalBalance;
+}
+
+export interface WalletListResponse {
+  data: Wallet[];
+}
+
+export interface WalletTransactionMetadata {
+  transaction_status: string;
+  transaction_gross_amount: string;
+  transaction_net_amount: string;
+  transaction_currency: string;
+  source_client_id?: string;
+  source_wallet_type?: string;
+  destination_client_id?: string;
+  destination_wallet_type?: string;
+}
+
+export interface WalletTransaction {
+  request_id: string;
+  transaction_id: number;
+  timestamp: string;
+  category: 'deposit' | 'withdrawal' | string;
+  channel: 'cashier' | 'payment_agent' | string;
+  metadata: WalletTransactionMetadata;
+}
+
+export interface WalletTransactionsLinks {
+  self: string | null;
+  next: string | null;
+  prev: string | null;
+  first: string | null;
+}
+
+export interface WalletTransactionsResponse {
+  data: WalletTransaction[];
+  links?: WalletTransactionsLinks;
+}
+
+/**
+ * Lists wallets for the authenticated client using GET /wallet/v1/wallets
+ */
+export const getWalletList = async (
+  token: string,
+  conversionCurrency?: string
+): Promise<Wallet[]> => {
+  try {
+    const url = new URL(`${API_BASE_URL}/wallet/v1/wallets`);
+    if (conversionCurrency) {
+      url.searchParams.set('conversion_currency', conversionCurrency);
+    }
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: getAuthHeaders(token),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      if (data.errors && data.errors.length > 0 && data.errors[0].message) {
+        throw new Error(data.errors[0].message);
+      }
+      throw new Error(`Failed to fetch wallet list: ${response.status}`);
+    }
+
+    const json: WalletListResponse = await response.json();
+    return json.data || [];
+  } catch (error: unknown) {
+    throw new Error(error instanceof Error ? error.message : 'Network error fetching wallet list');
+  }
+};
+
+/**
+ * Lists transactions for a specific wallet type using GET /wallet/v1/transactions/{wallet_type}
+ */
+export const getWalletTransactions = async (
+  token: string,
+  walletType: string = 'main',
+  params?: {
+    request_id?: string;
+    transaction_currency?: string;
+    start_date_time?: string;
+    end_date_time?: string;
+    page_cursor?: string;
+    limit?: number;
+  }
+): Promise<WalletTransactionsResponse> => {
+  try {
+    const url = new URL(`${API_BASE_URL}/wallet/v1/transactions/${walletType}`);
+    if (params) {
+      if (params.request_id) url.searchParams.set('request_id', params.request_id);
+      if (params.transaction_currency) url.searchParams.set('transaction_currency', params.transaction_currency);
+      if (params.start_date_time) url.searchParams.set('start_date_time', params.start_date_time);
+      if (params.end_date_time) url.searchParams.set('end_date_time', params.end_date_time);
+      if (params.page_cursor) url.searchParams.set('page_cursor', params.page_cursor);
+      if (params.limit) url.searchParams.set('limit', params.limit.toString());
+    }
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: getAuthHeaders(token),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      if (data.errors && data.errors.length > 0 && data.errors[0].message) {
+        throw new Error(data.errors[0].message);
+      }
+      throw new Error(`Failed to fetch wallet transactions: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error: unknown) {
+    throw new Error(error instanceof Error ? error.message : 'Network error fetching wallet transactions');
+  }
+};
+
 // ============================================================================
 // URL Builders
 // ============================================================================

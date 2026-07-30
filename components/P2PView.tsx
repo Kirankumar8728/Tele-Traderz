@@ -243,24 +243,41 @@ export const P2PView: React.FC<P2PViewProps> = ({ account, send, onBackToCashier
 
   // Live dynamic adverts state (initialized with verified fallback data)
   const [liveAdverts, setLiveAdverts] = useState<P2PAdvert[]>(SAMPLE_ADVERTS);
+  const [isLiveFromApi, setIsLiveFromApi] = useState<boolean>(false);
 
   // Request P2P Ad list with subscription from Deriv WebSocket on mount & tab change
   const fetchP2PAdverts = () => {
     setIsRefreshing(true);
     try {
-      send({
+      const payload: any = {
         p2p_advert_list: 1,
         counterparty_type: activeSubTab === 'buy_usd' ? 'sell' : 'buy',
         subscribe: 1,
-        use_client_limits: 1,
         req_id: Date.now()
-      });
+      };
+      if (selectedCurrency && selectedCurrency !== 'ALL') {
+        payload.local_currency = selectedCurrency;
+      }
+      send(payload);
     } catch (e) {
       console.log('[P2P] WS send error:', e);
     }
     setTimeout(() => {
       setIsRefreshing(false);
     }, 1000);
+  };
+
+  // Request live P2P orders from Deriv WebSocket
+  const fetchP2POrders = () => {
+    try {
+      send({
+        p2p_order_list: 1,
+        subscribe: 1,
+        req_id: Date.now()
+      });
+    } catch (e) {
+      console.log('[P2P Orders] WS send error:', e);
+    }
   };
 
   // Listen to Deriv WebSocket messages for live ad stream & auto-closing ads
@@ -270,6 +287,7 @@ export const P2PView: React.FC<P2PViewProps> = ({ account, send, onBackToCashier
 
       // Handle p2p_advert_list subscription updates
       if (data.msg_type === 'p2p_advert_list' && data.p2p_advert_list?.list) {
+        setIsLiveFromApi(true);
         const rawList = data.p2p_advert_list.list;
         const formattedList: P2PAdvert[] = rawList
           .filter((item: any) => item.is_active !== 0 && item.is_visible !== 0 && !item.deleted)
@@ -288,18 +306,37 @@ export const P2PView: React.FC<P2PViewProps> = ({ account, send, onBackToCashier
             min_order_usd: Number(item.min_order_amount_limit || item.min_order_amount || 10),
             max_order_usd: Number(item.max_order_amount_limit || item.max_order_amount || 5000),
             available_usd: Number(item.amount_display || item.amount || 10000),
-            payment_methods: Array.isArray(item.payment_method_names) ? item.payment_method_names : ['UPI', 'Bank Transfer'],
+            payment_methods: Array.isArray(item.payment_method_names) ? item.payment_method_names : (Array.isArray(item.payment_method) ? item.payment_method : ['UPI', 'Bank Transfer']),
             terms: String(item.description || 'Fast completion via Deriv P2P.')
           }));
 
         if (formattedList.length > 0) {
           setLiveAdverts(prev => {
-            // Keep existing ads from other tab/types or merge with formattedList
             const otherTypeAds = prev.filter(a => a.type !== (activeSubTab === 'buy_usd' ? 'sell' : 'buy'));
             return [...formattedList, ...otherTypeAds];
           });
         }
       } 
+      // Handle p2p_order_list subscription updates
+      else if (data.msg_type === 'p2p_order_list' && data.p2p_order_list?.list) {
+        setIsLiveFromApi(true);
+        const rawOrders = data.p2p_order_list.list;
+        const formattedOrders: P2POrder[] = rawOrders.map((ord: any) => ({
+          id: String(ord.id || ord.order_id),
+          advertiser_name: ord.advertiser_details?.name || 'Deriv Trader',
+          type: ord.type === 'buy' ? 'buy' : 'sell',
+          amount_usd: Number(ord.amount_display || ord.amount || 0),
+          amount_local: Number(ord.local_currency_amount || 0),
+          local_currency: String(ord.local_currency || 'USD'),
+          rate: Number(ord.rate || 1),
+          status: String(ord.status || 'pending'),
+          created_at: new Date((ord.created_time || Date.now() / 1000) * 1000).toLocaleString(),
+          payment_method: String(ord.payment_method || 'Online Payment')
+        }));
+        if (formattedOrders.length > 0) {
+          setOrders(formattedOrders);
+        }
+      }
       // Handle individual advert updates (auto-close / pause / deletion events from Deriv)
       else if (data.msg_type === 'p2p_advert_info' && data.p2p_advert_info) {
         const info = data.p2p_advert_info;
@@ -325,8 +362,10 @@ export const P2PView: React.FC<P2PViewProps> = ({ account, send, onBackToCashier
   useEffect(() => {
     if (activeSubTab === 'buy_usd' || activeSubTab === 'sell_usd') {
       fetchP2PAdverts();
+    } else if (activeSubTab === 'orders') {
+      fetchP2POrders();
     }
-  }, [activeSubTab]);
+  }, [activeSubTab, selectedCurrency]);
 
   // Filter Adverts from liveAdverts state
   const filteredAdverts = liveAdverts.filter(ad => {
@@ -423,19 +462,22 @@ export const P2PView: React.FC<P2PViewProps> = ({ account, send, onBackToCashier
   return (
     <div className="w-full p-2 sm:p-3 space-y-4 relative z-10 text-white animate-in fade-in duration-300">
       
-      {/* Demo Account Warning if on Virtual */}
+      {/* Demo Account Live API Indicator */}
       {account?.is_virtual && (
-        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-between gap-3 text-amber-300 text-xs">
+        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-between gap-3 text-emerald-300 text-xs">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-400" />
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
             <span className="font-bold">
-              You are using a Demo account. Deriv P2P trades require a verified real account.
+              Demo Mode Active — Streaming Real Live Deriv API Market Data (<span className="font-mono text-emerald-400">p2p_advert_list</span> WebSocket feed).
             </span>
           </div>
 
           <button
             onClick={() => window.open('https://dp2p.deriv.com/', '_blank')}
-            className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 rounded-lg text-[10px] font-black uppercase flex items-center gap-1.5 transition-all flex-shrink-0"
+            className="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-200 rounded-lg text-[10px] font-black uppercase flex items-center gap-1.5 transition-all flex-shrink-0"
           >
             <span>Deriv Portal</span>
             <ExternalLink className="w-3 h-3" />
