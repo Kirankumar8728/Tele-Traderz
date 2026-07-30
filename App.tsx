@@ -1992,7 +1992,11 @@ const App: React.FC = () => {
         </main>
 
         {/* Standard 5-tab Touch Navigation */}
-        <BottomNavigation currentView={currentView} onViewChange={setCurrentView} />
+        <BottomNavigation 
+          currentView={currentView} 
+          onViewChange={setCurrentView} 
+          openPositionsCount={filteredOpenPositions.length} 
+        />
 
         {/* Premium Draggable Sliding Bottom Sheets */}
         <AnimatePresence>
