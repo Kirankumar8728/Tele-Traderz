@@ -143,40 +143,84 @@ export const registerCustomOverlays = () => {
   registerOverlay({
     name: 'tradeLine',
     totalStep: 2,
-    needDefaultPointFigure: true,
-    needDefaultXAxisFigure: true,
-    needDefaultYAxisFigure: true,
+    needDefaultPointFigure: false,
+    needDefaultXAxisFigure: false,
+    needDefaultYAxisFigure: false,
     createPointFigures: ({ coordinates, bounding, precision, overlay }) => {
       if (coordinates.length === 0 || !overlay.points[0]) return [];
-      const { x, y } = coordinates[0];
+      const x1 = coordinates[0].x;
+      const y = coordinates[0].y;
       const price = overlay.points[0].value ?? 0;
       const profit = (overlay.points[0] as any).profit ?? 0;
-      const color = profit >= 0 ? '#22c55e' : '#ef4444';
-      
+      const type = (overlay.points[0] as any).type ?? 'TRADE';
+      const duration = (overlay.points[0] as any).duration ?? 30;
+
+      let x2 = coordinates[1]?.x;
+      if (!x2 || x2 <= x1) {
+        // Project upcoming candle end position based on trade duration
+        const estimatedOffset = Math.max(60, Math.min(bounding.width - x1, duration * 3));
+        x2 = x1 + estimatedOffset;
+      }
+
+      // Transparent line colors (soft green for profit/call, soft red for loss/put)
+      const lineColor = profit >= 0 ? 'rgba(34, 197, 94, 0.65)' : 'rgba(239, 68, 68, 0.65)';
+      const textColor = profit >= 0 ? '#4ade80' : '#f87171';
+      const dotColor = profit >= 0 ? '#22c55e' : '#ef4444';
+
       return [
+        // Execution line from present candle to upcoming expiry candle
         {
           type: 'line',
           attrs: {
             coordinates: [
-              { x: 0, y },
-              { x: bounding.width, y }
+              { x: x1, y: y },
+              { x: x2, y: y }
             ]
           },
           style: {
-            color: color,
-            size: 1,
-            style: 'solid'
+            color: lineColor,
+            size: 2,
+            style: 'dashed',
+            dashedValue: [4, 4]
           }
         },
+        // Execution entry candle dot marker
+        {
+          type: 'circle',
+          attrs: {
+            x: x1,
+            y: y,
+            r: 4
+          },
+          style: {
+            style: 'fill',
+            color: dotColor
+          }
+        },
+        // Target expiry candle dot marker
+        {
+          type: 'circle',
+          attrs: {
+            x: x2,
+            y: y,
+            r: 4
+          },
+          style: {
+            style: 'stroke',
+            color: dotColor,
+            size: 2
+          }
+        },
+        // Floating label with execution details
         {
           type: 'text',
           attrs: {
-            x: bounding.width - 60,
+            x: x1 + 6,
             y: y - 10,
-            text: `${profit >= 0 ? '+' : ''}${profit.toFixed(precision.price)}`
+            text: `${type.toUpperCase()} @ ${price.toFixed(precision.price)}`
           },
           style: {
-            color: color,
+            color: textColor,
             size: 10,
             weight: 'bold',
             family: 'monospace'

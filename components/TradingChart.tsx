@@ -685,17 +685,28 @@ const TradingChart: React.FC<TradingChartProps> = ({
     positionOverlaysRef.current = {};
 
     openPositions.forEach(pos => {
-      const entryPrice = parseFloat(pos.entry_price);
+      const entryPrice = parseFloat(pos.entry_price || pos.entry_tick || pos.buy_price || pos.entry_spot || pos.barrier || '0');
+      if (!entryPrice || isNaN(entryPrice)) return;
+
       const currentPrice = lastPrice;
-      const profit = (currentPrice - entryPrice) * (pos.type === 'CALL' ? 1 : -1);
+      const contractType = (pos.contract_type || pos.type || 'CALL').toUpperCase();
+      const isCall = contractType === 'CALL' || contractType === 'HIGHER' || contractType === 'TOUCH' || contractType === 'ONETOUCH';
+      const profit = (currentPrice - entryPrice) * (isCall ? 1 : -1);
+
+      const startTimeSec = pos.date_start || pos.purchase_time || pos.entry_tick_time || Math.floor(Date.now() / 1000);
+      const durationSec = pos.duration || (pos.date_expiry ? Math.max(5, pos.date_expiry - startTimeSec) : 30);
+      const expiryTimeSec = pos.date_expiry || (startTimeSec + durationSec);
 
       const id = chartRef.current?.createOverlay({
         name: 'tradeLine',
-        points: [{ value: entryPrice, profit: profit } as any],
+        points: [
+          { timestamp: startTimeSec * 1000, value: entryPrice, profit, type: contractType, duration: durationSec } as any,
+          { timestamp: expiryTimeSec * 1000, value: entryPrice } as any
+        ],
         lock: true
       });
       if (id) {
-        positionOverlaysRef.current[pos.id] = id as string;
+        positionOverlaysRef.current[pos.id || pos.contract_id] = id as string;
       }
     });
   }, [openPositions, lastPrice]);

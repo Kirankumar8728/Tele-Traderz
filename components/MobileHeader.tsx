@@ -59,16 +59,24 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
             </div>
           </div>
         ) : (
-          <button
-            onClick={onLoginClick}
-            className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 rounded-xl text-[9px] font-black uppercase tracking-wider shadow-lg shadow-red-900/15 active:scale-95 transition-all"
-          >
-            Login
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={onLoginClick}
+              className="px-2.5 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-[9px] font-black uppercase tracking-wider text-gray-300 hover:text-white active:scale-95 transition-all"
+            >
+              Login
+            </button>
+            <button
+              onClick={onLoginClick}
+              className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 rounded-xl text-[9px] font-black uppercase tracking-wider shadow-lg shadow-red-900/15 text-white active:scale-95 transition-all"
+            >
+              Register
+            </button>
+          </div>
         )}
 
         <button
-          onClick={onAccountMenuOpen}
+          onClick={account ? onAccountMenuOpen : onLoginClick}
           className="w-8.5 h-8.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:border-red-500/50 transition-all"
         >
           <User className="w-4 h-4 text-gray-300" />

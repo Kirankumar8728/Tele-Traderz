@@ -336,21 +336,12 @@ export const useDeriv = () => {
               setAvailableAccounts(prev => prev.map(acc => acc.loginid === data.balance.loginid ? { ...acc, balance: val ?? acc.balance } : acc));
             }
 
-            if (newBal !== undefined && prevBalanceRef.current !== null) {
-              if (newBal > prevBalanceRef.current && !isTradePayoutRef.current) {
-                setSuccess('Amount Successfully Deposited. Start Trading now. 🚀');
-              }
-            }
             if (newBal !== undefined) {
               prevBalanceRef.current = newBal;
             }
             break;
           }
           case 'transaction':
-            // Check for real money deposit
-            if (data.transaction && data.transaction.action === 'deposit') {
-              setSuccess('Amount Successfully Deposited. Start Trading now. 🚀');
-            }
             // Live update for trade history
             authWs.current?.send(JSON.stringify({ profit_table: 1, limit: 50, description: 1 }));
             authWs.current?.send(JSON.stringify({ balance: 1 }));
@@ -546,9 +537,10 @@ export const useDeriv = () => {
         }
       };
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError('Authentication Connection Failed: ' + errorMessage);
-      
+      if (import.meta.env.DEV) {
+        console.warn('[Deriv Auth] Connection attempt error:', err);
+      }
+      setIsReconnecting(true);
       const delay = getReconnectDelay(attempt);
       authReconnectTimeout.current = setTimeout(() => connectAuthRef.current(token, accountId, attempt + 1), delay);
     }
@@ -580,7 +572,41 @@ export const useDeriv = () => {
     
     if (accessToken) {
       try {
-        const accountsList = await getAccountsInfo(accessToken);
+        let accountsList: DerivAccount[] = [];
+        let attempts = 0;
+        let lastError: any = null;
+        
+        while (attempts < 3) {
+          try {
+            accountsList = await getAccountsInfo(accessToken);
+            lastError = null;
+            break;
+          } catch (err) {
+            lastError = err;
+            attempts++;
+            if (attempts < 3) {
+              await new Promise(r => setTimeout(r, 1000));
+            }
+          }
+        }
+
+        if (lastError && accountsList.length === 0) {
+          const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);
+          if (errorMessage.includes('401') || errorMessage.includes('Unauthorized') || errorMessage.includes('invalid_token')) {
+            const { performLogout } = await import('../src/services/authService');
+            await performLogout();
+            setAccount(null);
+            setAvailableAccounts([]);
+            setError('Session expired. Please login again.');
+            return;
+          } else {
+            // Transient network failure during auth initialization - retry quietly
+            setIsReconnecting(true);
+            setTimeout(() => initAuth(), 2000);
+            return;
+          }
+        }
+
         setAvailableAccounts(accountsList);
         
         let activeAccountId = localStorage.getItem('deriv_active_account');
@@ -604,11 +630,8 @@ export const useDeriv = () => {
           connectAuth(accessToken, activeAccountId!);
         }
       } catch (err: unknown) {
-        const { performLogout } = await import('../src/services/authService');
-        await performLogout();
-        setAccount(null);
-        setAvailableAccounts([]);
-        setError('Session expired or invalid. Please login again.');
+        setIsReconnecting(true);
+        setTimeout(() => initAuth(), 2000);
       }
     }
   }, [connectAuth]);
