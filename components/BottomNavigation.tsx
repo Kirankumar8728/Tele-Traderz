@@ -45,9 +45,9 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
 
   return (
     <nav 
-      className="w-full flex-shrink-0 bg-[#141922] backdrop-blur-md border-t border-white/10 px-1 pt-1.5 pb-2 flex items-center justify-around z-[110] select-none shadow-2xl"
+      className="w-full flex-shrink-0 bg-[#141922]/98 backdrop-blur-md border-t border-white/10 px-1 py-1 flex items-center justify-around z-[110] select-none shadow-2xl safe-bottom-nav"
       style={{
-        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)'
+        paddingBottom: 'max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 8px))'
       }}
     >
       {navItems.map((item) => {
@@ -56,7 +56,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           <button
             key={item.id}
             onClick={() => onViewChange(item.id)}
-            className="flex-1 flex flex-col items-center justify-center gap-1 py-1 relative text-gray-500 hover:text-white transition-all active:scale-95"
+            className="flex-1 flex flex-col items-center justify-center gap-1.5 h-full relative text-gray-500 hover:text-white transition-all active:scale-95"
             id={`nav-tab-${item.label.toLowerCase()}`}
           >
             {/* Active Indicator Background Ripple */}

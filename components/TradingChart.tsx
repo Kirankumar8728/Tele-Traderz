@@ -44,6 +44,9 @@ interface TradingChartProps {
   openPositions?: any[];
   onMarketSelectorOpen?: () => void;
   onSymbolSelect?: (symbol: string) => void;
+  onIndicatorsClick?: () => void;
+  onDrawingsClick?: () => void;
+  onSettingsClick?: () => void;
 }
 
 let overlaysRegistered = false;
@@ -55,7 +58,10 @@ const TradingChart: React.FC<TradingChartProps> = ({
   barrier,
   openPositions = [],
   onMarketSelectorOpen,
-  onSymbolSelect
+  onSymbolSelect,
+  onIndicatorsClick,
+  onDrawingsClick,
+  onSettingsClick,
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -870,6 +876,9 @@ const TradingChart: React.FC<TradingChartProps> = ({
           }
         }}
         onRefresh={forceReload}
+        onIndicatorsClick={onIndicatorsClick}
+        onDrawingsClick={onDrawingsClick}
+        onSettingsClick={onSettingsClick}
       />
 
       {/* 2. BODY LAYOUT (Left Toolbar + Chart Area + Right Collapsible Sidebar) */}
@@ -928,7 +937,7 @@ const TradingChart: React.FC<TradingChartProps> = ({
 
             {/* Inline Indicator Parameters Editor Modal */}
             {editingIndicatorId && (
-              <div className="absolute inset-0 flex items-center justify-center bg-[#0b0e14]/75 backdrop-blur-sm z-30 pointer-events-auto">
+              <div className="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-[220] pointer-events-auto p-4 select-none">
                 <div className="bg-[#111622] border border-white/10 rounded-3xl p-5 w-72 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in duration-150">
                   <div className="flex items-center justify-between border-b border-white/5 pb-2">
                     <span className="text-[10px] font-black uppercase tracking-widest text-red-500">

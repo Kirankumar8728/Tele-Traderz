@@ -62,7 +62,7 @@ export const IndicatorBottomSheet: React.FC<IndicatorBottomSheetProps> = ({ isOp
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[150] flex items-end justify-center select-none">
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-end justify-center select-none">
         {/* Click outside backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -79,7 +79,7 @@ export const IndicatorBottomSheet: React.FC<IndicatorBottomSheetProps> = ({ isOp
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-          className="w-full max-w-md bg-[#141922] border-t border-white/10 rounded-t-[2rem] p-6 max-h-[85vh] flex flex-col z-[160] shadow-[0_-8px_32px_rgba(0,0,0,0.5)]"
+          className="w-full max-w-md bg-[#141922] border-t border-white/10 rounded-t-[2rem] p-6 max-h-[85vh] flex flex-col z-[210] shadow-[0_-8px_32px_rgba(0,0,0,0.5)]"
           style={{ paddingBottom: 'calc(var(--safe-bottom) + 24px)' }}
         >
           {/* Draggable Drag-Indicator Handle */}

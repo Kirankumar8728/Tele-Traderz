@@ -1894,7 +1894,7 @@ const App: React.FC = () => {
   if (isMobile) {
     return (
       <div 
-        className="fixed inset-0 flex flex-col h-full w-full bg-[#07090e] text-white overflow-hidden font-sans select-none z-0"
+        className="flex flex-col h-screen h-[100dvh] w-full bg-[#07090e] text-white overflow-hidden font-sans select-none"
       >
         {/* Mobile Header with Market & Profile toggles */}
         <MobileHeader
@@ -1941,6 +1941,9 @@ const App: React.FC = () => {
                         openPositions={filteredOpenPositions}
                         onMarketSelectorOpen={() => setShowMarketSelector(true)}
                         onSymbolSelect={setSelectedSymbol}
+                        onIndicatorsClick={() => setMobileIndicatorsOpen(true)}
+                        onDrawingsClick={() => setMobileDrawingsOpen(true)}
+                        onSettingsClick={() => setMobileSettingsOpen(true)}
                       />
                     </Suspense>
                   </ErrorBoundary>
@@ -1991,7 +1994,7 @@ const App: React.FC = () => {
         {/* Premium Draggable Sliding Bottom Sheets */}
         <AnimatePresence>
           {showMarketSelector && (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[150] flex items-end justify-center">
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-end justify-center">
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -2004,7 +2007,7 @@ const App: React.FC = () => {
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-                className="w-full max-w-md bg-[#141922] border-t border-white/10 rounded-t-[2rem] max-h-[85vh] overflow-y-auto z-[160] shadow-2xl"
+                className="w-full max-w-md bg-[#141922] border-t border-white/10 rounded-t-[2rem] max-h-[85vh] overflow-y-auto z-[210] shadow-2xl"
                 style={{ paddingBottom: 'calc(var(--safe-bottom) + 20px)' }}
               >
                 <div className="w-12 h-1.5 bg-white/15 rounded-full mx-auto my-3" />

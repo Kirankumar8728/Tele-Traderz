@@ -20,6 +20,9 @@ interface ChartToolbarProps {
   setSidebarOpen: (open: boolean) => void;
   onSymbolSelect: (symbol: string) => void;
   onRefresh: () => void;
+  onIndicatorsClick?: () => void;
+  onDrawingsClick?: () => void;
+  onSettingsClick?: () => void;
 }
 
 const FAVORITE_SYMBOLS = [
@@ -41,6 +44,9 @@ export const ChartToolbar: React.FC<ChartToolbarProps> = ({
   setSidebarOpen,
   onSymbolSelect,
   onRefresh,
+  onIndicatorsClick,
+  onDrawingsClick,
+  onSettingsClick,
 }) => {
   const {
     isFullscreen,
@@ -53,6 +59,22 @@ export const ChartToolbar: React.FC<ChartToolbarProps> = ({
   const { markets = [] } = useDeriv();
 
   const handleTabClick = (tab: 'indicators' | 'drawings' | 'settings' | 'alerts' | 'templates' | 'ai') => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    if (isMobile) {
+      if ((tab === 'indicators' || tab === 'templates') && onIndicatorsClick) {
+        onIndicatorsClick();
+        return;
+      }
+      if (tab === 'drawings' && onDrawingsClick) {
+        onDrawingsClick();
+        return;
+      }
+      if ((tab === 'settings' || tab === 'ai') && onSettingsClick) {
+        onSettingsClick();
+        return;
+      }
+    }
+
     onTabChange(tab);
     if (!isSidebarOpen || activeSidebarTab !== tab) {
       setSidebarOpen(true);
