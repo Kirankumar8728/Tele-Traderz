@@ -20,6 +20,7 @@ import TradingBottomSheet from './components/TradingBottomSheet';
 import IndicatorBottomSheet from './components/IndicatorBottomSheet';
 import DrawingBottomSheet from './components/DrawingBottomSheet';
 import ChartSettingsSheet from './components/ChartSettingsSheet';
+import AIBottomSheet from './components/AIBottomSheet';
 import FloatingTradeButton from './components/FloatingTradeButton';
 import { P2PView } from './components/P2PView';
 import { CashierHub } from './components/CashierHub';
@@ -81,6 +82,7 @@ const App: React.FC = () => {
   const [mobileIndicatorsOpen, setMobileIndicatorsOpen] = useState(false);
   const [mobileDrawingsOpen, setMobileDrawingsOpen] = useState(false);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
+  const [mobileAIOpen, setMobileAIOpen] = useState(false);
   const [mobileTradingOpen, setMobileTradingOpen] = useState(false);
   
   const Footer = () => (
@@ -1944,6 +1946,7 @@ const App: React.FC = () => {
                         onIndicatorsClick={() => setMobileIndicatorsOpen(true)}
                         onDrawingsClick={() => setMobileDrawingsOpen(true)}
                         onSettingsClick={() => setMobileSettingsOpen(true)}
+                        onAIClick={() => setMobileAIOpen(true)}
                       />
                     </Suspense>
                   </ErrorBoundary>
@@ -2074,6 +2077,15 @@ const App: React.FC = () => {
             <ChartSettingsSheet
               isOpen={mobileSettingsOpen}
               onClose={() => setMobileSettingsOpen(false)}
+            />
+          )}
+
+          {mobileAIOpen && (
+            <AIBottomSheet
+              isOpen={mobileAIOpen}
+              onClose={() => setMobileAIOpen(false)}
+              symbol={selectedSymbol}
+              timeframe={timeframe}
             />
           )}
         </AnimatePresence>
