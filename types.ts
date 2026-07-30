@@ -59,6 +59,18 @@ export interface DerivAccount {
   is_virtual: boolean;
 }
 
+export interface StatementTransaction {
+  action_type: string;
+  amount: number;
+  balance_after: number;
+  contract_id?: number;
+  display_name?: string;
+  longcode?: string;
+  shortcode?: string;
+  transaction_id: number;
+  transaction_time: number;
+}
+
 export interface DerivTick {
   underlying_symbol: string;
   quote: number;

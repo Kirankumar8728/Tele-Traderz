@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DERIV_WS_URL } from '../constants';
-import { DerivAccount, Market, Proposal, TradeHistory, TradeType, Timeframe } from '../types';
+import { DerivAccount, Market, Proposal, TradeHistory, TradeType, Timeframe, StatementTransaction } from '../types';
 import { db } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import {
@@ -58,6 +58,7 @@ export const useDeriv = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
+  const [statementTransactions, setStatementTransactions] = useState<StatementTransaction[]>([]);
   const [isWalletsLoading, setIsWalletsLoading] = useState(false);
   const onTradeExecutedRef = useRef<((trade: any) => void) | null>(null);
   const onTradeClosedRef = useRef<((trade: any) => void) | null>(null);
@@ -445,9 +446,22 @@ export const useDeriv = () => {
               setHistory(profitData);
             }
             break;
-          case 'statement':
+          case 'statement': {
             if (!data.statement?.transactions) break;
             
+            const rawTx: StatementTransaction[] = data.statement.transactions.map((t: Record<string, unknown>) => ({
+              action_type: String(t.action_type || 'transaction'),
+              amount: parseFloat(String(t.amount || '0')),
+              balance_after: parseFloat(String(t.balance_after || '0')),
+              contract_id: t.contract_id ? Number(t.contract_id) : undefined,
+              display_name: String(t.display_name || t.longcode || ''),
+              longcode: String(t.longcode || ''),
+              shortcode: String(t.shortcode || ''),
+              transaction_id: Number(t.transaction_id || Date.now()),
+              transaction_time: Number(t.transaction_time || Math.floor(Date.now() / 1000))
+            }));
+            setStatementTransactions(rawTx);
+
             // Only update history from statement if we don't have better data
             // Filter to only include completed trade transactions (sell/payout) or adjustments
             const statementData = data.statement.transactions
@@ -477,6 +491,7 @@ export const useDeriv = () => {
               return prev;
             });
             break;
+          }
           case 'topup_virtual':
             setError(null);
             setSuccess("Demo balance successfully reset!");
@@ -892,6 +907,12 @@ export const useDeriv = () => {
     }
   }, []);
 
+  const fetchStatement = useCallback((limit: number = 100) => {
+    if (authWs.current?.readyState === WebSocket.OPEN) {
+      authWs.current.send(JSON.stringify({ statement: 1, limit, description: 1 }));
+    }
+  }, []);
+
   const sellContract = useCallback((contractId: number, price: number = 0) => {
     send({ sell: contractId, price });
   }, [send]);
@@ -986,9 +1007,11 @@ export const useDeriv = () => {
     success,
     wallets,
     walletTransactions,
+    statementTransactions,
     isWalletsLoading,
     fetchWallets,
     fetchWalletTransactions,
+    fetchStatement,
     send, 
     login, 
     signup,
