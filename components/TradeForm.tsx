@@ -141,12 +141,19 @@ const TradeForm: React.FC<TradeFormProps> = ({
     });
   };
 
-  // Clear buying state when isTrading becomes false
+  // Clear buying state and lastIdRef when isTrading becomes false or error occurs
   useEffect(() => {
     if (!isTrading) {
       setBuyingTypes(new Set());
     }
   }, [isTrading]);
+
+  useEffect(() => {
+    if (error) {
+      setBuyingTypes(new Set());
+      lastIdRef.current = null;
+    }
+  }, [error]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-US', {

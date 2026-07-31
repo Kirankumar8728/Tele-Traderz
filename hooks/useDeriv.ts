@@ -255,6 +255,17 @@ export const useDeriv = () => {
         setError(null);
         setIsConnected(true);
         setIsReconnecting(false);
+
+        // Purge any stale unauthenticated proposals from state and refs
+        setProposals({});
+        proposalIds.current = {};
+        proposalWs.current = {};
+        pendingProposals.current.clear();
+
+        // Safely forget all proposal streams on public WS
+        if (publicWs.current?.readyState === WebSocket.OPEN) {
+          publicWs.current.send(JSON.stringify({ forget_all: 'proposal' }));
+        }
         
         // Keep connection alive: 30s as per docs
         if (pingIntervalAuth.current) clearInterval(pingIntervalAuth.current);
@@ -272,18 +283,8 @@ export const useDeriv = () => {
         socket.send(JSON.stringify({ proposal_open_contract: 1, subscribe: 1 }));
         socket.send(JSON.stringify({ get_settings: 1 }));
 
-        // Restore active proposals hosted on this specific WebSocket
-        Object.entries(lastProposalParams.current).forEach(([type, params]) => {
-          pendingProposals.current.add(type);
-          socket.send(JSON.stringify({
-            proposal: 1,
-            subscribe: 1,
-            basis: 'stake',
-            currency: 'USD',
-            ...params,
-            req_id: type === 'CALL' || type === 'HIGHER' || type === 'TOUCH' || type === 'ONETOUCH' ? 100 : 200
-          }));
-        });
+        // Trigger clean proposal re-subscription on authenticated WS
+        setProposalTrigger(prev => prev + 1);
       };
 
       socket.onerror = (error) => {
@@ -297,12 +298,28 @@ export const useDeriv = () => {
         }
         
         if (data.error) {
-          setError(data.error.message);
-          if (data.msg_type === 'buy') setIsTrading(false);
-          if (data.msg_type === 'proposal') {
-            const pType = data.echo_req?.contract_type;
-            if (pType) pendingProposals.current.delete(pType);
+          console.warn('[Deriv Auth Error Notice]:', data.error?.message || data.error);
+          const errMsg = String(data.error?.message || '').toLowerCase();
+          
+          if (data.msg_type === 'proposal' || data.msg_type === 'buy' || errMsg.includes('proposal') || errMsg.includes('contract')) {
+            const pType = data.echo_req?.contract_type || data.echo_req?.passthrough?.type;
+            if (pType) {
+              pendingProposals.current.delete(pType);
+              delete proposalIds.current[pType];
+              delete proposalWs.current[pType];
+              setProposals(prev => {
+                const next = { ...prev };
+                delete next[pType];
+                return next;
+              });
+            }
+            if (errMsg.includes('unknown proposal contract') || errMsg.includes('expired') || errMsg.includes('invalid')) {
+              setProposalTrigger(prev => prev + 1);
+            }
           }
+
+          setError(data.error.message || 'Error executing request');
+          if (data.msg_type === 'buy') setIsTrading(false);
           return;
         }
 
@@ -898,6 +915,11 @@ export const useDeriv = () => {
     lastProposalParams.current[type] = params;
     proposalWs.current[type] = targetWs;
     pendingProposals.current.add(type);
+    
+    // Safety auto-clear pending flag after 4 seconds
+    setTimeout(() => {
+      pendingProposals.current.delete(type);
+    }, 4000);
 
     const req_id = params.req_id || (type === 'CALL' || type === 'HIGHER' || type === 'TOUCH' || type === 'ONETOUCH' ? 100 : 200);
     
