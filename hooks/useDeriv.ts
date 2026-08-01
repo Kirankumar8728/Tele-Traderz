@@ -493,24 +493,36 @@ export const useDeriv = () => {
               // Sync active status into history
               setHistory(prev => {
                 const existingIndex = prev.findIndex(h => Number(h.contract_id) === contractId);
+                const activeHistoryItem: TradeHistory = {
+                  contract_id: contractId,
+                  underlying_symbol: contract.underlying || contract.underlying_symbol || '',
+                  buy_price: buyPrice,
+                  sell_price: sellPrice || 0,
+                  bid_price: bidPrice,
+                  status: status,
+                  type: contract.contract_type,
+                  entry_time: contract.date_start || contract.purchase_time || Math.floor(Date.now() / 1000),
+                  exit_time: contract.date_expiry,
+                  profit: profitLoss,
+                  shortcode: contract.shortcode,
+                  longcode: contract.longcode,
+                  is_valid_to_sell: isValidToSell ? 1 : 0,
+                  isValidToSell: isValidToSell,
+                  is_sold: isSold ? 1 : 0,
+                  isSold: isSold,
+                  is_expired: isExpired ? 1 : 0,
+                  isExpired: isExpired,
+                };
+
                 if (existingIndex >= 0) {
                   const next = [...prev];
                   next[existingIndex] = {
                     ...next[existingIndex],
-                    status: status,
-                    is_valid_to_sell: isValidToSell ? 1 : 0,
-                    isValidToSell: isValidToSell,
-                    is_sold: isSold ? 1 : 0,
-                    isSold: isSold,
-                    is_expired: isExpired ? 1 : 0,
-                    isExpired: isExpired,
-                    bid_price: bidPrice,
-                    sell_price: sellPrice,
-                    profit: profitLoss,
+                    ...activeHistoryItem,
                   };
                   return next;
                 }
-                return prev;
+                return [activeHistoryItem, ...prev].slice(0, 50);
               });
             }
             break;
@@ -518,7 +530,7 @@ export const useDeriv = () => {
           case 'profit_table':
             setIsHistoryLoading(false);
             if (data.profit_table?.transactions) {
-              const profitData = data.profit_table.transactions.map((t: Record<string, unknown>) => {
+              const profitData: TradeHistory[] = data.profit_table.transactions.map((t: Record<string, unknown>) => {
                 const profitLoss = parseFloat(String(t.profit_loss || '0'));
                 const sellPrice = parseFloat(String(t.sell_price || '0'));
                 const buyPrice = parseFloat(String(t.buy_price || '0'));
@@ -528,18 +540,28 @@ export const useDeriv = () => {
 
                 return {
                   contract_id: Number(t.contract_id),
-                  underlying_symbol: t.display_name,
+                  underlying_symbol: String(t.display_name || t.underlying_symbol || ''),
                   buy_price: buyPrice,
                   sell_price: sellPrice,
                   status: profitLoss > 0 ? 'won' : (profitLoss < 0 ? 'lost' : 'draw'),
-                  type: t.contract_type,
-                  entry_time: t.purchase_time,
-                  exit_time: t.sell_time,
+                  type: String(t.contract_type || ''),
+                  entry_time: Number(t.purchase_time || 0),
+                  exit_time: Number(t.sell_time || 0),
                   profit: displayProfit,
-                  shortcode: t.shortcode
+                  shortcode: String(t.shortcode || ''),
+                  is_valid_to_sell: 0,
+                  isValidToSell: false,
+                  is_sold: 1,
+                  isSold: true,
                 };
               });
-              setHistory(profitData);
+
+              setHistory(prev => {
+                const activeFromPrev = prev.filter(h => String(h.status).toLowerCase() === 'open');
+                const activeIds = new Set(activeFromPrev.map(a => Number(a.contract_id)));
+                const filteredProfitData = profitData.filter(p => !activeIds.has(Number(p.contract_id)));
+                return [...activeFromPrev, ...filteredProfitData].slice(0, 50);
+              });
             }
             break;
           case 'statement': {
