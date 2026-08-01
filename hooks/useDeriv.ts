@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DERIV_WS_URL } from '../constants';
-import { DerivAccount, Market, Proposal, TradeHistory, TradeType, Timeframe, StatementTransaction } from '../types';
+import { DerivAccount, Market, Proposal, TradeHistory, TradeType, Timeframe, StatementTransaction, canSellContract } from '../types';
 import { db } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import {
@@ -368,61 +368,132 @@ export const useDeriv = () => {
             break;
           case 'buy':
             setIsTrading(false);
+            if (data.buy && data.buy.contract_id) {
+              if (authWs.current?.readyState === WebSocket.OPEN) {
+                authWs.current.send(JSON.stringify({ proposal_open_contract: 1, contract_id: data.buy.contract_id, subscribe: 1 }));
+              }
+            }
             if (onTradeExecutedRef.current) {
               const isManual = data.echo_req?.passthrough?.manual;
               onTradeExecutedRef.current({ ...data.buy, isManual });
             }
             break;
-          case 'proposal_open_contract':
+          case 'proposal_open_contract': {
             const contract = data.proposal_open_contract;
             if (!contract || !contract.contract_id) break;
 
-            if (contract.is_sold) {
+            const contractId = Number(contract.contract_id);
+            const status = String(contract.status || '').toLowerCase();
+            const isSold = Boolean(contract.is_sold === 1 || contract.is_sold === true);
+            const isValidToSell = Boolean(contract.is_valid_to_sell === 1 || contract.is_valid_to_sell === true);
+            const isExpired = Boolean(contract.is_expired === 1 || contract.is_expired === true);
+            const bidPrice = contract.bid_price !== undefined ? parseFloat(String(contract.bid_price)) : undefined;
+            const sellPrice = contract.sell_price !== undefined ? parseFloat(String(contract.sell_price)) : undefined;
+            const buyPrice = contract.buy_price !== undefined ? parseFloat(String(contract.buy_price)) : 0;
+            const profitLoss = parseFloat(String(contract.profit || contract.profit_loss || '0'));
+
+            // Store normalized contract state with fields required for sell logic
+            const normalizedContract = {
+              ...contract,
+              contract_id: contractId,
+              status: status,
+              is_sold: isSold ? 1 : 0,
+              isSold: isSold,
+              is_valid_to_sell: isValidToSell ? 1 : 0,
+              isValidToSell: isValidToSell,
+              is_expired: isExpired ? 1 : 0,
+              isExpired: isExpired,
+              bid_price: bidPrice,
+              sell_price: sellPrice,
+              buy_price: buyPrice,
+              profit: profitLoss,
+            };
+
+            const isClosed = isSold || isExpired || status === 'sold' || status === 'won' || status === 'lost' || status === 'expired' || status === 'closed' || status === 'cancelled';
+
+            if (isClosed) {
               if (onTradeClosedRef.current) onTradeClosedRef.current(contract);
               
-              // Update history immediately with local data for faster feedback
+              const displayProfit = profitLoss > 0 ? (sellPrice || profitLoss) : (profitLoss < 0 ? profitLoss : ((sellPrice && sellPrice > 0) ? sellPrice : -buyPrice));
+
               setHistory(prev => {
-                const contractId = Number(contract.contract_id);
-                // If it's already in history, don't duplicate
-                if (prev.some(h => Number(h.contract_id) === contractId)) return prev;
-                
-                const profitLoss = parseFloat(contract.profit || contract.profit_loss || '0');
-                const sellPrice = parseFloat(contract.sell_price || '0');
-                const buyPrice = parseFloat(contract.buy_price || '0');
-                
-                // User wants Gross Payout (+Total) for wins, Net Loss (-Stake) for losses
-                const displayProfit = profitLoss > 0 ? sellPrice : (profitLoss < 0 ? profitLoss : (sellPrice > 0 ? sellPrice : -buyPrice));
-                
-                const newHistoryItem: TradeHistory = {
+                const existingIndex = prev.findIndex(h => Number(h.contract_id) === contractId);
+                const updatedItem: TradeHistory = {
                   contract_id: contractId,
                   underlying_symbol: contract.underlying,
                   buy_price: buyPrice,
-                  sell_price: sellPrice,
-                  status: (profitLoss > 0 ? 'won' : (profitLoss < 0 ? 'lost' : 'draw')) as 'won' | 'lost' | 'draw',
+                  sell_price: sellPrice || 0,
+                  bid_price: bidPrice,
+                  status: (status === 'sold' ? 'sold' : (profitLoss > 0 ? 'won' : (profitLoss < 0 ? 'lost' : 'draw'))),
                   type: contract.contract_type,
                   entry_time: contract.date_start,
                   exit_time: contract.date_expiry || contract.sell_time,
                   profit: displayProfit,
-                  shortcode: contract.shortcode
+                  shortcode: contract.shortcode,
+                  is_valid_to_sell: 0,
+                  isValidToSell: false,
+                  is_sold: 1,
+                  isSold: true,
+                  is_expired: isExpired ? 1 : 0,
+                  isExpired: isExpired,
                 };
-                
-                return [newHistoryItem, ...prev].slice(0, 50);
+
+                if (existingIndex >= 0) {
+                  const next = [...prev];
+                  next[existingIndex] = updatedItem;
+                  return next;
+                }
+                return [updatedItem, ...prev].slice(0, 50);
               });
 
               setOpenPositions(prev => {
                 const next = { ...prev };
-                delete next[contract.contract_id];
+                delete next[contractId];
                 return next;
               });
-              // Refresh history and balance when a trade closes
+
+              setSellErrors(prev => {
+                const next = { ...prev };
+                delete next[contractId];
+                return next;
+              });
+
               if (authWs.current?.readyState === WebSocket.OPEN) {
                 authWs.current.send(JSON.stringify({ balance: 1 }));
                 authWs.current.send(JSON.stringify({ profit_table: 1, limit: 50, description: 1 }));
               }
             } else {
-              setOpenPositions(prev => ({ ...prev, [contract.contract_id]: contract }));
+              // Active trade: update open positions
+              setOpenPositions(prev => ({
+                ...prev,
+                [contractId]: normalizedContract
+              }));
+
+              // Sync active status into history
+              setHistory(prev => {
+                const existingIndex = prev.findIndex(h => Number(h.contract_id) === contractId);
+                if (existingIndex >= 0) {
+                  const next = [...prev];
+                  next[existingIndex] = {
+                    ...next[existingIndex],
+                    status: status,
+                    is_valid_to_sell: isValidToSell ? 1 : 0,
+                    isValidToSell: isValidToSell,
+                    is_sold: isSold ? 1 : 0,
+                    isSold: isSold,
+                    is_expired: isExpired ? 1 : 0,
+                    isExpired: isExpired,
+                    bid_price: bidPrice,
+                    sell_price: sellPrice,
+                    profit: profitLoss,
+                  };
+                  return next;
+                }
+                return prev;
+              });
             }
             break;
+          }
           case 'profit_table':
             setIsHistoryLoading(false);
             if (data.profit_table?.transactions) {
@@ -985,8 +1056,14 @@ export const useDeriv = () => {
   }, []);
 
   const sellContract = useCallback((contractId: number, price: number = 0) => {
+    const pos = openPositions[contractId];
+    if (pos && !canSellContract(pos)) {
+      console.warn(`[SELL PREVENTED] Contract ${contractId} is not valid to sell.`);
+      setSellErrors(prev => ({ ...prev, [contractId]: 'Resale is not permitted for this contract.' }));
+      return;
+    }
     send({ sell: contractId, price });
-  }, [send]);
+  }, [openPositions, send]);
 
   const resetBalance = useCallback(async () => {
     if (!account || !account.is_virtual) {

@@ -83,7 +83,8 @@ export interface TradeHistory {
   underlying_symbol: string;
   buy_price: number;
   sell_price?: number;
-  status: 'open' | 'won' | 'lost' | 'sold' | 'draw';
+  bid_price?: number;
+  status: 'open' | 'won' | 'lost' | 'sold' | 'draw' | 'expired' | string;
   type: string;
   entry_tick?: number;
   exit_tick?: number;
@@ -93,6 +94,34 @@ export interface TradeHistory {
   app_id?: number;
   shortcode?: string;
   longcode?: string;
+  is_valid_to_sell?: boolean | number;
+  isValidToSell?: boolean;
+  is_sold?: boolean | number;
+  isSold?: boolean;
+  is_expired?: boolean | number;
+  isExpired?: boolean;
+}
+
+export function canSellContract(contract: any): boolean {
+  if (!contract) return false;
+
+  // 1. status == "open"
+  const status = String(contract.status || '').toLowerCase();
+  if (status !== 'open') return false;
+
+  // 2. is_sold == false
+  const isSold = contract.is_sold === 1 || contract.is_sold === true || contract.isSold === true;
+  if (isSold) return false;
+
+  // 3. is_valid_to_sell == true
+  const isValidToSell = contract.is_valid_to_sell === 1 || contract.is_valid_to_sell === true || contract.isValidToSell === true;
+  if (!isValidToSell) return false;
+
+  // 4. is_expired == false
+  const isExpired = contract.is_expired === 1 || contract.is_expired === true || contract.isExpired === true;
+  if (isExpired) return false;
+
+  return true;
 }
 
 export interface DocLink {
