@@ -812,43 +812,46 @@ const App: React.FC = () => {
                   const canSell = canSellContract(pos);
                   const bidOrSellPrice = pos.bid_price ?? pos.sell_price;
                   return (
-                    <div key={pos.contract_id} className="bg-white/10 border border-white/10 p-4 rounded-2xl flex items-center justify-between relative overflow-hidden">
+                    <div key={pos.contract_id} className="bg-white/10 border border-white/10 p-4 rounded-2xl flex flex-col gap-3 relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-1 h-full bg-yellow-500" />
-                      <div className="flex items-center gap-4 pl-2">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${Number(pos.profit) >= 0 ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
-                          {pos.contract_type === 'CALL' || pos.contract_type === 'HIGHER' || pos.contract_type === 'TOUCH' || pos.contract_type === 'ONETOUCH' ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                        </div>
-                        <div>
-                          <p className="text-sm font-black">{getMarketName(pos.underlying, pos.shortcode)}</p>
-                          <div className="flex flex-col">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase">
-                              {getTradeTypeDisplay(pos.contract_type, pos.shortcode)} • {pos.purchase_time ? format(pos.purchase_time * 1000, 'HH:mm:ss') : 'N/A'}
-                            </p>
-                            <p className="text-[8px] font-mono text-gray-600 uppercase mt-0.5">ID: {pos.contract_id}</p>
-                            {sellErrors[pos.contract_id] && (
-                              <p className="text-[8px] text-red-500 font-bold mt-1 animate-pulse">
-                                {sellErrors[pos.contract_id]}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 pl-2">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${Number(pos.profit) >= 0 ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+                            {pos.contract_type === 'CALL' || pos.contract_type === 'HIGHER' || pos.contract_type === 'TOUCH' || pos.contract_type === 'ONETOUCH' ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                          </div>
+                          <div>
+                            <p className="text-sm font-black">{getMarketName(pos.underlying, pos.shortcode)}</p>
+                            <div className="flex flex-col">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase">
+                                {getTradeTypeDisplay(pos.contract_type, pos.shortcode)} • {pos.purchase_time ? format(pos.purchase_time * 1000, 'HH:mm:ss') : 'N/A'}
                               </p>
-                            )}
+                              <p className="text-[8px] font-mono text-gray-600 uppercase mt-0.5">ID: {pos.contract_id}</p>
+                            </div>
                           </div>
                         </div>
+                        <div className="text-right flex flex-col items-end gap-1">
+                          <p className={`text-sm font-black ${Number(pos.profit) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            {Number(pos.profit) >= 0 ? '+' : ''}{Number(pos.profit || 0).toFixed(getCurrencyConfig(account?.currency || 'USD').decimals)} {account?.currency}
+                          </p>
+                          <p className="text-[10px] font-bold text-yellow-500 uppercase">
+                            {pos.date_expiry ? `${formatTimeLeft(Math.max(0, Math.floor(pos.date_expiry - now / 1000)))} left` : 'RUNNING'}
+                          </p>
+                          {canSell && (
+                            <button 
+                              onClick={() => sellContract(pos.contract_id)}
+                              className="px-2.5 py-1 bg-red-600/20 border border-red-600/30 rounded-lg text-[8px] font-black uppercase text-red-500 hover:bg-red-600 hover:text-white transition-all flex items-center gap-1"
+                            >
+                              Sell {bidOrSellPrice !== undefined && bidOrSellPrice > 0 ? `(${bidOrSellPrice.toFixed(getCurrencyConfig(account?.currency || 'USD').decimals)})` : ''}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-right flex flex-col items-end gap-1">
-                        <p className={`text-sm font-black ${Number(pos.profit) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                          {Number(pos.profit) >= 0 ? '+' : ''}{Number(pos.profit || 0).toFixed(getCurrencyConfig(account?.currency || 'USD').decimals)} {account?.currency}
-                        </p>
-                        <p className="text-[10px] font-bold text-yellow-500 uppercase">
-                          {pos.date_expiry ? `${formatTimeLeft(Math.max(0, Math.floor(pos.date_expiry - now / 1000)))} left` : 'RUNNING'}
-                        </p>
-                        {canSell && (
-                          <button 
-                            onClick={() => sellContract(pos.contract_id)}
-                            className="px-2.5 py-1 bg-red-600/20 border border-red-600/30 rounded-lg text-[8px] font-black uppercase text-red-500 hover:bg-red-600 hover:text-white transition-all flex items-center gap-1"
-                          >
-                            Sell {bidOrSellPrice !== undefined && bidOrSellPrice > 0 ? `(${bidOrSellPrice.toFixed(getCurrencyConfig(account?.currency || 'USD').decimals)})` : ''}
-                          </button>
-                        )}
-                      </div>
+                      {sellErrors[pos.contract_id] && (
+                        <div className="pt-2 border-t border-red-500/20 flex items-center gap-2 text-red-400 text-xs font-semibold bg-red-500/10 px-3 py-2 rounded-xl">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                          <span>{sellErrors[pos.contract_id]}</span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -872,50 +875,53 @@ const App: React.FC = () => {
                   const bidOrSellPrice = mergedTrade.bid_price ?? mergedTrade.sell_price;
 
                   return (
-                    <div key={i} className="bg-white/5 border border-white/5 p-4 rounded-2xl flex items-center justify-between group hover:bg-white/10 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${Number(mergedTrade.profit || 0) > 0 ? 'bg-green-500/10 text-green-500' : Number(mergedTrade.profit || 0) < 0 ? 'bg-red-500/10 text-red-500' : 'bg-gray-500/10 text-gray-400'}`}>
-                          {mergedTrade.type === 'CALL' || mergedTrade.type === 'HIGHER' || mergedTrade.type === 'TOUCH' || mergedTrade.type === 'ONETOUCH' ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                        </div>
-                        <div>
-                          <p className="text-sm font-black">{getMarketName(mergedTrade.underlying_symbol || mergedTrade.underlying, mergedTrade.shortcode)}</p>
-                          <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                              <p className="text-[10px] font-bold text-gray-500 uppercase">{mergedTrade.entry_time ? format(mergedTrade.entry_time * 1000, 'MMM dd, HH:mm') : 'N/A'}</p>
-                              <span className="w-1 h-1 bg-white/10 rounded-full" />
-                              <p className="text-[10px] font-bold text-gray-500 uppercase">{getTradeTypeDisplay(mergedTrade.type, mergedTrade.shortcode)}</p>
-                              {mergedTrade.entry_time && mergedTrade.exit_time && (
-                                <>
-                                  <span className="w-1 h-1 bg-white/10 rounded-full" />
-                                  <p className="text-[10px] font-bold text-gray-500 uppercase">Dur: {formatTimeLeft(mergedTrade.exit_time - mergedTrade.entry_time)}</p>
-                                </>
-                              )}
+                    <div key={i} className="bg-white/5 border border-white/5 p-4 rounded-2xl flex flex-col gap-3 group hover:bg-white/10 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${Number(mergedTrade.profit || 0) > 0 ? 'bg-green-500/10 text-green-500' : Number(mergedTrade.profit || 0) < 0 ? 'bg-red-500/10 text-red-500' : 'bg-gray-500/10 text-gray-400'}`}>
+                            {mergedTrade.type === 'CALL' || mergedTrade.type === 'HIGHER' || mergedTrade.type === 'TOUCH' || mergedTrade.type === 'ONETOUCH' ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                          </div>
+                          <div>
+                            <p className="text-sm font-black">{getMarketName(mergedTrade.underlying_symbol || mergedTrade.underlying, mergedTrade.shortcode)}</p>
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <p className="text-[10px] font-bold text-gray-500 uppercase">{mergedTrade.entry_time ? format(mergedTrade.entry_time * 1000, 'MMM dd, HH:mm') : 'N/A'}</p>
+                                <span className="w-1 h-1 bg-white/10 rounded-full" />
+                                <p className="text-[10px] font-bold text-gray-500 uppercase">{getTradeTypeDisplay(mergedTrade.type, mergedTrade.shortcode)}</p>
+                                {mergedTrade.entry_time && mergedTrade.exit_time && (
+                                  <>
+                                    <span className="w-1 h-1 bg-white/10 rounded-full" />
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase">Dur: {formatTimeLeft(mergedTrade.exit_time - mergedTrade.entry_time)}</p>
+                                  </>
+                                )}
+                              </div>
+                              <p className="text-[8px] font-mono text-gray-600 uppercase mt-0.5">ID: {mergedTrade.contract_id}</p>
                             </div>
-                            <p className="text-[8px] font-mono text-gray-600 uppercase mt-0.5">ID: {mergedTrade.contract_id}</p>
-                            {sellErrors[mergedTrade.contract_id] && (
-                              <p className="text-[8px] text-red-500 font-bold mt-1 animate-pulse">
-                                {sellErrors[mergedTrade.contract_id]}
-                              </p>
-                            )}
                           </div>
                         </div>
+                        <div className="text-right flex flex-col items-end gap-1">
+                          <p className={`text-sm font-black ${Number(mergedTrade.profit || 0) > 0 ? 'text-green-500' : Number(mergedTrade.profit || 0) < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                            {Number(mergedTrade.profit || 0) > 0 ? `+${Number(mergedTrade.profit || 0).toFixed(getCurrencyConfig(account?.currency || 'USD').decimals)}` : Number(mergedTrade.profit || 0) < 0 ? `-${Math.abs(Number(mergedTrade.profit || 0)).toFixed(getCurrencyConfig(account?.currency || 'USD').decimals)}` : '0.00'} {account?.currency}
+                          </p>
+                          <p className={`text-[10px] font-bold uppercase ${Number(mergedTrade.profit || 0) > 0 ? 'text-green-500/50' : Number(mergedTrade.profit || 0) < 0 ? 'text-red-500/50' : 'text-gray-500/50'}`}>
+                            {String(mergedTrade.status || '').toLowerCase() === 'open' ? 'Active' : (Number(mergedTrade.profit || 0) > 0 ? 'Profit' : Number(mergedTrade.profit || 0) < 0 ? 'Loss' : 'Draw')}
+                          </p>
+                          {canSell && (
+                            <button 
+                              onClick={() => sellContract(mergedTrade.contract_id)}
+                              className="px-2.5 py-1 bg-red-600/20 border border-red-600/30 rounded-lg text-[8px] font-black uppercase text-red-500 hover:bg-red-600 hover:text-white transition-all flex items-center gap-1"
+                            >
+                              Sell {bidOrSellPrice !== undefined && bidOrSellPrice > 0 ? `(${bidOrSellPrice.toFixed(getCurrencyConfig(account?.currency || 'USD').decimals)})` : ''}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-right flex flex-col items-end gap-1">
-                        <p className={`text-sm font-black ${Number(mergedTrade.profit || 0) > 0 ? 'text-green-500' : Number(mergedTrade.profit || 0) < 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                          {Number(mergedTrade.profit || 0) > 0 ? `+${Number(mergedTrade.profit || 0).toFixed(getCurrencyConfig(account?.currency || 'USD').decimals)}` : Number(mergedTrade.profit || 0) < 0 ? `-${Math.abs(Number(mergedTrade.profit || 0)).toFixed(getCurrencyConfig(account?.currency || 'USD').decimals)}` : '0.00'} {account?.currency}
-                        </p>
-                        <p className={`text-[10px] font-bold uppercase ${Number(mergedTrade.profit || 0) > 0 ? 'text-green-500/50' : Number(mergedTrade.profit || 0) < 0 ? 'text-red-500/50' : 'text-gray-500/50'}`}>
-                          {String(mergedTrade.status || '').toLowerCase() === 'open' ? 'Active' : (Number(mergedTrade.profit || 0) > 0 ? 'Profit' : Number(mergedTrade.profit || 0) < 0 ? 'Loss' : 'Draw')}
-                        </p>
-                        {canSell && (
-                          <button 
-                            onClick={() => sellContract(mergedTrade.contract_id)}
-                            className="px-2.5 py-1 bg-red-600/20 border border-red-600/30 rounded-lg text-[8px] font-black uppercase text-red-500 hover:bg-red-600 hover:text-white transition-all flex items-center gap-1"
-                          >
-                            Sell {bidOrSellPrice !== undefined && bidOrSellPrice > 0 ? `(${bidOrSellPrice.toFixed(getCurrencyConfig(account?.currency || 'USD').decimals)})` : ''}
-                          </button>
-                        )}
-                      </div>
+                      {sellErrors[mergedTrade.contract_id] && (
+                        <div className="pt-2 border-t border-red-500/20 flex items-center gap-2 text-red-400 text-xs font-semibold bg-red-500/10 px-3 py-2 rounded-xl">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                          <span>{sellErrors[mergedTrade.contract_id]}</span>
+                        </div>
+                      )}
                     </div>
                   );
                 })

@@ -320,6 +320,27 @@ export const useDeriv = () => {
 
           setError(data.error.message || 'Error executing request');
           if (data.msg_type === 'buy') setIsTrading(false);
+          if (data.msg_type === 'sell' || data.echo_req?.sell) {
+            const sellContractId = Number(data.echo_req?.sell);
+            if (sellContractId) {
+              setOpenPositions(prev => {
+                if (!prev[sellContractId]) return prev;
+                return {
+                  ...prev,
+                  [sellContractId]: {
+                    ...prev[sellContractId],
+                    is_valid_to_sell: 0,
+                    isValidToSell: false,
+                  }
+                };
+              });
+              setHistory(prev => prev.map(h => Number(h.contract_id) === sellContractId ? { ...h, is_valid_to_sell: 0, isValidToSell: false } : h));
+              setSellErrors(prev => ({ ...prev, [sellContractId]: 'This contract can no longer be sold before expiry.' }));
+              if (authWs.current?.readyState === WebSocket.OPEN) {
+                authWs.current.send(JSON.stringify({ proposal_open_contract: 1, contract_id: sellContractId }));
+              }
+            }
+          }
           return;
         }
 
@@ -1059,7 +1080,22 @@ export const useDeriv = () => {
     const pos = openPositions[contractId];
     if (pos && !canSellContract(pos)) {
       console.warn(`[SELL PREVENTED] Contract ${contractId} is not valid to sell.`);
-      setSellErrors(prev => ({ ...prev, [contractId]: 'Resale is not permitted for this contract.' }));
+      setOpenPositions(prev => {
+        if (!prev[contractId]) return prev;
+        return {
+          ...prev,
+          [contractId]: {
+            ...prev[contractId],
+            is_valid_to_sell: 0,
+            isValidToSell: false,
+          }
+        };
+      });
+      setHistory(prev => prev.map(h => Number(h.contract_id) === contractId ? { ...h, is_valid_to_sell: 0, isValidToSell: false } : h));
+      setSellErrors(prev => ({ ...prev, [contractId]: 'This contract can no longer be sold before expiry.' }));
+      if (authWs.current?.readyState === WebSocket.OPEN) {
+        authWs.current.send(JSON.stringify({ proposal_open_contract: 1, contract_id: contractId }));
+      }
       return;
     }
     send({ sell: contractId, price });

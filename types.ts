@@ -110,15 +110,15 @@ export function canSellContract(contract: any): boolean {
   if (status !== 'open') return false;
 
   // 2. is_sold == false
-  const isSold = contract.is_sold === 1 || contract.is_sold === true || contract.isSold === true;
+  const isSold = contract.is_sold === 1 || contract.is_sold === true || contract.is_sold === '1' || contract.isSold === true;
   if (isSold) return false;
 
   // 3. is_valid_to_sell == true
-  const isValidToSell = contract.is_valid_to_sell === 1 || contract.is_valid_to_sell === true || contract.isValidToSell === true;
+  const isValidToSell = contract.is_valid_to_sell === 1 || contract.is_valid_to_sell === true || contract.is_valid_to_sell === '1' || contract.isValidToSell === true;
   if (!isValidToSell) return false;
 
   // 4. is_expired == false
-  const isExpired = contract.is_expired === 1 || contract.is_expired === true || contract.isExpired === true;
+  const isExpired = contract.is_expired === 1 || contract.is_expired === true || contract.is_expired === '1' || contract.isExpired === true;
   if (isExpired) return false;
 
   return true;
