@@ -24,12 +24,13 @@ import { analyzeMarketData } from "./services/technicalAnalysis.js";
 
 const _filename = typeof import.meta.url !== 'undefined' ? fileURLToPath(import.meta.url) : (typeof __filename !== 'undefined' ? __filename : '');
 const _dirname = typeof import.meta.url !== 'undefined' ? path.dirname(_filename) : (typeof __dirname !== 'undefined' ? __dirname : '');
+const rootDir = process.cwd();
 
 // ============================================================================
 // AI Icon Generation
 // ============================================================================
 async function ensureAppIcon() {
-  const iconPath = path.join(_dirname, "public", "app-icon.png");
+  const iconPath = path.join(rootDir, "public", "app-icon.png");
   if (fs.existsSync(iconPath)) return;
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -56,7 +57,7 @@ async function ensureAppIcon() {
     for (const part of parts) {
       if (part.inlineData && part.inlineData.data) {
         const buffer = Buffer.from(part.inlineData.data, 'base64');
-        const publicDir = path.join(_dirname, "public");
+        const publicDir = path.join(rootDir, "public");
         if (!fs.existsSync(publicDir)) {
           fs.mkdirSync(publicDir);
         }
@@ -135,7 +136,7 @@ async function startServer() {
 
     // Append files from the root directory, ignoring node_modules, dist, and .git
     archive.glob("**/*", {
-      cwd: _dirname,
+      cwd: rootDir,
       ignore: ["node_modules/**", "dist/**", ".git/**", "firebase-debug.log"],
       dot: true
     });
@@ -474,9 +475,10 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     // Production serving
-    app.use(express.static(path.join(_dirname, "dist")));
+    const distPath = path.join(rootDir, "dist");
+    app.use(express.static(distPath));
     app.get('*all', (req: express.Request, res: express.Response) => {
-      res.sendFile(path.join(_dirname, "dist", "index.html"));
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
